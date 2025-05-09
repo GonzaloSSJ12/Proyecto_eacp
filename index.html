@@ -2,134 +2,203 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Traductor LSA Offline</title>
-    <!-- Versión local de MediaPipe -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traductor LSA Argentina</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+        }
+        
+        #container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #videoElement {
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+        
+        #outputText {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            font-size: 1.2em;
+            min-height: 80px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #status {
+            color: #666;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        @media (max-width: 480px) {
+            #videoContainer {
+                height: 50vh;
+            }
+        }
+    </style>
 </head>
 <body>
-    <video id="videoPreview" width="640" height="480" autoplay playsinline></video>
-    <div id="outputText" style="font-size: 1.5em; margin-top: 20px;"></div>
-    <div id="status" style="color: #666;">Inicializando...</div>
+    <div id="container">
+        <h1>Traductor de Señas Argentino</h1>
+        <div id="status">Inicializando cámara...</div>
+        <div id="videoContainer">
+            <video id="videoElement" playsinline autoplay></video>
+        </div>
+        <div id="outputText"></div>
+    </div>
 
-<script>
-const videoElement = document.getElementById('videoPreview');
-const outputDiv = document.getElementById('outputText');
-const statusDiv = document.getElementById('status');
-
-// 1. Configuración alternativa de modelos
-const MODEL_CONFIG = {
-    wasmPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm/vision_wasm_internal.js',
-    modelPath: 'https://teachablemachine.withgoogle.com/models/6OJsJ9Q7D/',
-    gestureModel: 'gesture_recognizer.task'  // Archivo local alternativo
-};
-
-// 2. Inicialización mejorada
-async function initializeModel() {
-    try {
-        statusDiv.textContent = "Descargando modelo...";
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js"></script>
+    <script>
+        const videoElement = document.getElementById('videoElement');
+        const outputDiv = document.getElementById('outputText');
+        const statusDiv = document.getElementById('status');
         
-        const vision = await Vision.FilesetResolver.forVisionTasks(MODEL_CONFIG.wasmPath);
-        
-        // Intenta cargar primero desde repositorio alternativo
-        try {
-            gestureRecognizer = await Vision.GestureRecognizer.createFromOptions(
-                vision,
-                {
+        let gestureRecognizer;
+        let lastDetection = 0;
+        let sentence = [];
+        let isProcessing = false;
+
+        // Mapeo de gestos LSA Argentina
+        const LSA_MAPPING = {
+            'Thumb_Up': 'Hola',
+            'Open_Palm': ' ',
+            'Closed_Fist': 'A',
+            'Victory': 'B',
+            'Pointing_Up': 'C',
+            'ILoveYou': 'D',
+            'Thumb_Down': 'E',
+            'Raised_Hand': 'F',
+            'Finger_Heart': 'Gracias',
+            'Hand_Wave': 'Adiós',
+            'Rock': 'Por favor'
+        };
+
+        async function initialize() {
+            try {
+                // 1. Cargar modelo
+                statusDiv.textContent = 'Cargando modelo de IA...';
+                const vision = await Vision.FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                );
+
+                // 2. Configurar reconocedor
+                gestureRecognizer = await Vision.GestureRecognizer.createFromOptions(vision, {
                     baseOptions: {
-                        modelAssetPath: MODEL_CONFIG.modelPath + MODEL_CONFIG.gestureModel,
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
                         delegate: "GPU"
                     },
-                    runningMode: "VIDEO"
-                }
-            );
-        } catch (onlineError) {
-            statusDiv.textContent = "Usando modelo local de respaldo...";
-            gestureRecognizer = await Vision.GestureRecognizer.createFromOptions(
-                vision,
-                {
-                    baseOptions: {
-                        modelAssetPath: './modelos/gesture_recognizer.task',  // Ruta local
-                        delegate: "CPU"
-                    },
-                    runningMode: "VIDEO"
-                }
-            );
-        }
-        
-        statusDiv.textContent = "Modelo cargado!";
-        startCamera();
-    } catch (error) {
-        statusDiv.textContent = "Error crítico: Recarga la página";
-        console.error("Error de modelo:", error);
-    }
-}
+                    runningMode: "VIDEO",
+                    numHands: 2,
+                    minHandDetectionConfidence: 0.7,
+                    minTrackingConfidence: 0.5
+                });
 
-// 3. Gestión de cámara mejorada
-async function startCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                facingMode: "user",
-                frameRate: { ideal: 30 }
+                // 3. Iniciar cámara
+                await setupCamera();
+                statusDiv.textContent = 'Listo para traducir!';
+                
+                // 4. Iniciar detección
+                detectGestures();
+
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}`;
+                console.error(error);
             }
-        });
-        
-        videoElement.srcObject = stream;
-        await videoElement.play();
-        processFrames();
-    } catch (error) {
-        statusDiv.textContent = "Error de cámara: " + error.message;
-    }
-}
-
-// 4. Procesamiento de frames optimizado
-async function processFrames() {
-    while (true) {
-        if (!gestureRecognizer) await new Promise(resolve => setTimeout(resolve, 100));
-        
-        try {
-            const results = gestureRecognizer.recognizeForVideo(videoElement, Date.now());
-            updateGestures(results);
-        } catch (error) {
-            console.error("Error de frame:", error);
         }
-        
-        await new Promise(resolve => requestAnimationFrame(resolve));
-    }
-}
 
-// 5. Detección precisa de gestos
-function updateGestures(results) {
-    if (!results || !results.gestures) return;
-    
-    const currentGestures = results.gestures
-        .flat()
-        .filter(g => g.score > 0.7)
-        .map(g => g.categoryName);
-    
-    if (currentGestures.length > 0) {
-        const translated = translateGestures(currentGestures);
-        outputDiv.textContent = translated;
-    }
-}
+        async function setupCamera() {
+            const constraints = {
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: 'user',
+                    frameRate: { ideal: 30 }
+                }
+            };
 
-// 6. Traducción mejorada
-function translateGestures(gestures) {
-    const GESTURE_MAP = {
-        'Thumb_Up': 'Hola',
-        'Open_Palm': ' ',
-        'Closed_Fist': 'A',
-        'Victory': 'B',
-        // Agregar más mapeos según necesidad
-    };
-    
-    return gestures.map(g => GESTURE_MAP[g] || '').join(' ');
-}
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                await new Promise(resolve => videoElement.onloadedmetadata = resolve);
+            } catch (error) {
+                statusDiv.textContent = 'Permite el acceso a la cámara para usar la aplicación';
+                throw error;
+            }
+        }
 
-// Iniciar
-initializeModel();
-</script>
+        async function detectGestures() {
+            while (true) {
+                if (!gestureRecognizer || !videoElement.srcObject) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    continue;
+                }
+
+                try {
+                    const results = gestureRecognizer.recognizeForVideo(videoElement, Date.now());
+                    processResults(results);
+                } catch (error) {
+                    console.error('Error en detección:', error);
+                }
+                
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            }
+        }
+
+        function processResults(results) {
+            if (!results.gestures || results.gestures.length === 0) return;
+
+            const currentTime = Date.now();
+            if (currentTime - lastDetection < 1000) return;
+
+            const gestures = results.gestures[0]
+                .filter(g => g.score >= 0.7)
+                .map(g => LSA_MAPPING[g.categoryName] || '');
+
+            if (gestures.length > 0) {
+                const translation = gestures.join(' ');
+                updateOutput(translation);
+                lastDetection = currentTime;
+            }
+        }
+
+        function updateOutput(text) {
+            sentence.push(text);
+            
+            // Limpiar texto cada 10 palabras
+            if (sentence.length > 10) {
+                sentence = sentence.slice(-5);
+            }
+
+            outputDiv.textContent = sentence.join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // Iniciar aplicación
+        initialize();
+
+        // Manejo de errores global
+        window.addEventListener('error', (e) => {
+            statusDiv.textContent = `Error: ${e.message}`;
+        });
+    </script>
 </body>
 </html>
