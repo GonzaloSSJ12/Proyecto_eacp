@@ -2,113 +2,78 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seguimiento de Manos y Gestos LSA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestos con MediaPipe</title>
   <style>
-    body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; margin: 0; padding: 20px; font-family: sans-serif; }
-    #container { position: relative; width: 640px; height: 480px; }
-    video, canvas { position: absolute; top: 0; left: 0; width: 640px; height: 480px; }
-    #message { margin-top: 500px; font-size: 1.2em; color: #333; width: 640px; text-align: left; white-space: pre-wrap; }
+    body { display: flex; flex-direction: column; align-items: center; background:#fafafa; margin:0; }
+    #video, #canvas { position: absolute; top:50px; width:640px; height:480px; }
+    #log { margin-top:550px; width:640px; font-size:1.2em; color:#333; }
   </style>
 </head>
 <body>
-  <h1>Reconocimiento de Gestos LSA</h1>
-  <div id="container">
-    <video id="video" autoplay muted></video>
-    <canvas id="overlay"></canvas>
-  </div>
-  <div id="message"></div>
+  <h2>Detección de Gestos (MediaPipe)</h2>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div id="log">Esperando gesto...</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <!-- 1) Carga del paquete de Tasks-Vision -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest"></script> <!-- MediaPipe Gesture Recognizer CDN :contentReference[oaicite:5]{index=5} -->
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('overlay');
-    canvas.width = 640; canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-    const messageEl = document.getElementById('message');
+    const { FilesetResolver, GestureRecognizer, GestureRecognizerModelConfig, VisionRunningMode } = window;
 
-    // Para acumular texto
-    const detected = [];
+    async function init() {
+      // 2) Resolver rutas de modelos desde jsDelivr
+      const visionFiles = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+      );
 
-    // Retener último gesto para confirmación
-    let lastGesture = null;
-    let lastTime = 0;
-    const confirmDelay = 500; // ms
+      // 3) Configurar el reconocedor de gestos
+      const gestureRecognizer = await GestureRecognizer.createFromModelAndOptions(
+        visionFiles,
+        new GestureRecognizerModelConfig({
+          modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/gesture_recognizer.task', 
+          runningMode: VisionRunningMode.LIVE_STREAM,
+          numHands: 2,            // hasta 2 manos al mismo tiempo :contentReference[oaicite:6]{index=6}
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        })
+      );
 
-    // Configurar MediaPipe Hands
-    const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-    hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
-    hands.onResults(onResults);
-    const camera = new Camera(video, { onFrame: async () => await hands.send({ image: video }), width: 640, height: 480 });
-    camera.start();
+      // 4) Preparar cámara
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        video.srcObject = stream;
+        video.onloadedmetadata = () => video.play();
+      });
 
-    const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
-
-    function onResults(results) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        // Dibujar
-        results.multiHandLandmarks.forEach(l => {
-          drawConnectors(ctx, l, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-          drawLandmarks(ctx, l, { color: '#FF0000', lineWidth: 1, radius: 4 });
-        });
-        // Reconocer gesto en primera mano
-        const g = recognize(results.multiHandLandmarks[0]);
-        const now = performance.now();
-        if (g && g === lastGesture && now - lastTime > confirmDelay) {
-          // confirmar y agregar si no repetido
-          if (detected[detected.length-1] !== g) detected.push(g);
-          updateMessage();
-          lastTime = now;
-        } else if (g && g !== lastGesture) {
-          lastGesture = g;
-          lastTime = now;
-        }
-      }
+      // 5) Procesar cada frame
+      video.addEventListener('play', () => {
+        const log = document.getElementById('log');
+        const processFrame = async () => {
+          // enviar frame al reconocedor
+          const results = gestureRecognizer.recognizeForVideo(video, performance.now());
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (results.handedGestures.length > 0) {
+            // dibujar landmarks y conexiones
+            results.multiHandLandmarks.forEach((landmarks, i) => {
+              window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color:'#00FF00', lineWidth:2 });
+              window.drawLandmarks(ctx, landmarks, { color:'#FF0000', lineWidth:1 });
+              // mostrar gesto con mayor probabilidad
+              const best = results.handedGestures[i][0];
+              log.textContent = `Mano ${i+1}: ${best.categoryName} (${(best.score*100).toFixed(1)}%)`;
+            });
+          } else {
+            log.textContent = 'Sin gesto claro';
+          }
+          requestAnimationFrame(processFrame);
+        };
+        processFrame();
+      });
     }
 
-    function recognize(l) {
-      const f = countFingers(l);
-      // Gestos básicos
-      if (f >= 4) return 'Hola';          // Mano casi abierta
-      if (f <= 0) return 'Puño';         // Mano cerrada totalmente
-      // Pulgar arriba
-      if (isThumbsUp(l)) return 'Pulgar arriba';
-      // Te amo: pulgar, índice y meñique extendidos
-      if (isILoveYou(l)) return 'Te amo';
-      return null;
-    }
-
-    function countFingers(l) {
-      let c = 0;
-      [8,12,16,20].forEach(i => { if (l[i].y < l[i-2].y) c++; });
-      const right = l[17].x < l[5].x;
-      if (right ? l[4].x < l[3].x : l[4].x > l[3].x) c++;
-      return c;
-    }
-
-    function isThumbsUp(l) {
-      // pulgar extendido y resto doblados
-      const t = (l[4].x < l[3].x) === (l[17].x < l[5].x);
-      const others = [8,12,16,20].every(i => l[i].y > l[i-2].y);
-      return t && others;
-    }
-
-    function isILoveYou(l) {
-      // pulgar, indice, meñique extendidos; medio y anular doblados
-      const thumb = (l[4].x < l[3].x) === (l[17].x < l[5].x);
-      const index = l[8].y < l[6].y;
-      const middle = l[12].y > l[10].y;
-      const ring = l[16].y > l[14].y;
-      const pinky = l[20].y < l[18].y;
-      return thumb && index && pinky && middle && ring;
-    }
-
-    function updateMessage() {
-      messageEl.textContent = detected.join(' · ');
-    }
+    init();
   </script>
 </body>
 </html>
