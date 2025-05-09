@@ -2,19 +2,51 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Hand Landmark Visualizer</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- MediaPipe Hands + Drawing Utils -->
+  <title>Demo LSA sin servidor</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.1.0/dist/fingerpose.min.js"></script>
+  <style>video, canvas{width:320px;height:240px;}#out{font-size:1.5rem;margin-top:1rem;}</style>
 </head>
 <body>
-  <div class="container">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-  </div>
-  <script src="js/handDraw.js"></script>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+  <div id="out">Esperando gesto...</div>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const out = document.getElementById('out');
+
+    // 1. Definir gestos
+    const {GestureDescription, Finger, FingerCurl, GestureEstimator} = fp;
+    const hola = new GestureDescription('¡Hola!');
+    const gracias = new GestureDescription('Gracias');
+    for (let f of [Finger.Thumb, Finger.Index, Finger.Middle, Finger.Ring, Finger.Pinky]) {
+      hola.addCurl(f, FingerCurl.NoCurl, 1.0);
+      gracias.addCurl(f, FingerCurl.HalfCurl, 1.0);
+    }
+    const GE = new GestureEstimator([hola, gracias]);
+
+    // 2. Configurar MediaPipe Hands
+    const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
+    hands.onResults(results => {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (!results.multiHandLandmarks) return;
+      const lm = results.multiHandLandmarks[0];
+      drawConnectors(ctx, lm, HAND_CONNECTIONS,{color:'#00FF00', lineWidth:2});
+      drawLandmarks(ctx, lm,{color:'#FF0000', lineWidth:1, radius:4});
+      const est = GE.estimate(lm, 7.0);
+      if (est.gestures.length) {
+        const g = est.gestures.reduce((a,b)=>a.score>b.score?a:b).name;
+        out.innerText = `Gesto detectado: ${g}`;
+      } else out.innerText = 'Gesto no reconocido';
+    });
+
+    // 3. Iniciar cámara
+    new Camera(video, { onFrame: () => hands.send({image:video}), width:320, height:240 }).start();
+  </script>
 </body>
 </html>
