@@ -2,20 +2,70 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Debug Hand Tracking</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- MediaPipe Hands + Drawing Utils -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seguimiento de Mano</title>
+  <style>
+    body { display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; background: #f0f0f0; }
+    video, canvas { border: 2px solid #333; border-radius: 8px; }
+    canvas { position: absolute; top: 20px; }
+    #container { position: relative; width: 640px; height: 480px; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-    <div id="log">Estado: esperando cámara…</div>
+  <h1>Detector y Seguimiento de Mano</h1>
+  <div id="container">
+    <video id="video" width="640" height="480" autoplay muted></video>
+    <canvas id="overlay" width="640" height="480"></canvas>
   </div>
-  <script src="js/debugHand.js"></script>
+
+  <!-- Incluir librería MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  
+  <script>
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('overlay');
+    const ctx = canvasElement.getContext('2d');
+
+    // Configurar MediaPipe Hands
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    // Inicializar la cámara
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
+
+    // Función que dibuja puntos y líneas sobre la mano detectada
+    function onResults(results) {
+      // Limpiar canvas
+      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        for (const landmarks of results.multiHandLandmarks) {
+          // Dibujar conexiones entre puntos
+          drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+          // Dibujar puntos de cada landmark
+          drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
+        }
+      }
+    }
+  </script>
 </body>
 </html>
