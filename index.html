@@ -6,15 +6,17 @@
   <title>Seguimiento de Manos y Gestos</title>
   <style>
     body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; margin: 0; padding: 20px; font-family: sans-serif; }
-    video, canvas { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); }
-    video { z-index: 1; }
-    canvas { z-index: 2; }
-    #message { margin-top: 520px; font-size: 1.5em; color: #333; }
+    #container { position: relative; width: 640px; height: 480px; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 640px; height: 480px; }
+    #message { margin-top: 500px; font-size: 1.5em; color: #333; }
   </style>
 </head>
 <body>
-  <video id="video" width="640" height="480" autoplay muted></video>
-  <canvas id="overlay" width="640" height="480"></canvas>
+  <h1>Seguimiento de Manos y Gestos</h1>
+  <div id="container">
+    <video id="video" autoplay muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
   <div id="message"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
@@ -23,42 +25,60 @@
   <script>
     const videoElement = document.getElementById('video');
     const canvasElement = document.getElementById('overlay');
+    canvasElement.width = 640;
+    canvasElement.height = 480;
     const ctx = canvasElement.getContext('2d');
     const messageEl = document.getElementById('message');
 
-    // Inicializar MediaPipe Hands para 2 manos
+    // MediaPipe Hands configurado para 2 manos
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
     hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
     hands.onResults(onResults);
 
+    // Desestructurar utilidades de dibujo
+    const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
+
     // Iniciar cámara
-    const camera = new Camera(videoElement, { onFrame: async () => await hands.send({ image: videoElement }), width: 640, height: 480 });
+    const camera = new Camera(videoElement, {
+      onFrame: async () => await hands.send({ image: videoElement }),
+      width: 640,
+      height: 480
+    });
     camera.start();
 
     function onResults(results) {
       ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       messageEl.textContent = '';
 
-      if (results.multiHandLandmarks) {
-        for (const landmarks of results.multiHandLandmarks) {
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        results.multiHandLandmarks.forEach((landmarks) => {
           drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
           drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
-        }
-        // Detectar gesto en la primera mano
+        });
+        // Detectar gesto en primera mano
         const fingers = countFingers(results.multiHandLandmarks[0]);
-        if (fingers === 5) messageEl.textContent = '¡Hola!';
+        if (fingers === 5) {
+          messageEl.textContent = '¡Hola!';
+        } else if (fingers === 0) {
+          messageEl.textContent = 'Seña LSA: Puño (Fist)';
+        }
       }
     }
 
-    // Cuenta dedos extendidos (excepto pulgar)
+    // Cuenta dedos extendidos (pulgar comparando eje X, dedos resto eje Y)
     function countFingers(landmarks) {
-      const tips = [8, 12, 16, 20]; // índices de los dedos
       let count = 0;
-      for (let tip of tips) {
+      // Dedos índice, medio, anular y meñique
+      [8, 12, 16, 20].forEach(tip => {
         if (landmarks[tip].y < landmarks[tip - 2].y) count++;
+      });
+      // Pulgar: si mano derecha, x del tip < x de ip; si izquierda, al revés
+      const isRight = landmarks[17].x < landmarks[5].x;
+      if (isRight) {
+        if (landmarks[4].x < landmarks[3].x) count++;
+      } else {
+        if (landmarks[4].x > landmarks[3].x) count++;
       }
-      // Para pulgar, comparar eje X
-      if (landmarks[4].x < landmarks[3].x) count++;
       return count;
     }
   </script>
