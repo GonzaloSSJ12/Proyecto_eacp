@@ -3,74 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gestos con MediaPipe</title>
+  <title>Gestos con MediaPipe (corregido)</title>
   <style>
-    body { display: flex; flex-direction: column; align-items: center; background:#fafafa; margin:0; }
-    #video, #canvas { position: absolute; top:50px; width:640px; height:480px; }
-    #log { margin-top:550px; width:640px; font-size:1.2em; color:#333; }
+    body { margin: 0; background: #fafafa; display: flex; flex-direction: column; align-items: center; }
+    #video {
+      position: absolute;
+      top: 50px;
+      width: 640px;
+      height: 480px;
+      z-index: 1;
+    }
+    #canvas {
+      position: absolute;
+      top: 50px;
+      width: 640px;
+      height: 480px;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #log {
+      margin-top: 550px;
+      width: 640px;
+      font-size: 1.2em;
+      color: #333;
+    }
   </style>
 </head>
 <body>
   <h2>Detección de Gestos (MediaPipe)</h2>
+  <!-- 1) Video con playsinline y dimensión explícita -->
   <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="log">Esperando gesto...</div>
 
-  <!-- 1) Carga del paquete de Tasks-Vision -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest"></script> <!-- MediaPipe Gesture Recognizer CDN :contentReference[oaicite:5]{index=5} -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest"></script>
   <script>
     const { FilesetResolver, GestureRecognizer, GestureRecognizerModelConfig, VisionRunningMode } = window;
 
     async function init() {
-      // 2) Resolver rutas de modelos desde jsDelivr
       const visionFiles = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
       );
 
-      // 3) Configurar el reconocedor de gestos
       const gestureRecognizer = await GestureRecognizer.createFromModelAndOptions(
         visionFiles,
         new GestureRecognizerModelConfig({
-          modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/gesture_recognizer.task', 
+          modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/gesture_recognizer.task',
           runningMode: VisionRunningMode.LIVE_STREAM,
-          numHands: 2,            // hasta 2 manos al mismo tiempo :contentReference[oaicite:6]{index=6}
+          numHands: 2,
           minHandPresenceConfidence: 0.5,
           minTrackingConfidence: 0.5
         })
       );
 
-      // 4) Preparar cámara
       const video = document.getElementById('video');
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d');
-      navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-        video.srcObject = stream;
-        video.onloadedmetadata = () => video.play();
-      });
+      const log = document.getElementById('log');
 
-      // 5) Procesar cada frame
-      video.addEventListener('play', () => {
-        const log = document.getElementById('log');
-        const processFrame = async () => {
-          // enviar frame al reconocedor
-          const results = gestureRecognizer.recognizeForVideo(video, performance.now());
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          if (results.handedGestures.length > 0) {
-            // dibujar landmarks y conexiones
-            results.multiHandLandmarks.forEach((landmarks, i) => {
-              window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color:'#00FF00', lineWidth:2 });
-              window.drawLandmarks(ctx, landmarks, { color:'#FF0000', lineWidth:1 });
-              // mostrar gesto con mayor probabilidad
-              const best = results.handedGestures[i][0];
-              log.textContent = `Mano ${i+1}: ${best.categoryName} (${(best.score*100).toFixed(1)}%)`;
-            });
-          } else {
-            log.textContent = 'Sin gesto claro';
-          }
-          requestAnimationFrame(processFrame);
-        };
-        processFrame();
-      });
+      // 2) Solicitar cámara con dimensiones preferidas
+      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then(stream => {
+          video.srcObject = stream;
+          video.addEventListener('loadedmetadata', () => {
+            video.play();
+            requestAnimationFrame(processFrame);
+          });
+        })
+        .catch(err => {
+          console.error('Error cámara:', err.name, err.message);
+          log.textContent = 'No se pudo acceder a la cámara';
+        });
+
+      // 3) Procesar cada frame una vez que el vídeo esté listo
+      async function processFrame() {
+        const results = await gestureRecognizer.recognizeForVideo(video, performance.now());
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (results.handedGestures.length) {
+          results.multiHandLandmarks.forEach((landmarks, i) => {
+            window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color:'#00FF00', lineWidth:2 });
+            window.drawLandmarks(ctx, landmarks, { color:'#FF0000', lineWidth:1 });
+            const best = results.handedGestures[i][0];
+            log.textContent = `Mano ${i+1}: ${best.categoryName} (${(best.score*100).toFixed(1)}%)`;
+          });
+        } else {
+          log.textContent = 'Sin gesto claro';
+        }
+        requestAnimationFrame(processFrame);
+      }
     }
 
     init();
