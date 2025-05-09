@@ -3,138 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traductor LSA Argentina Funcional</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js"></script>
+    <title>Traductor LSA Argentina</title>
     <style>
-        /* Estilos móviles optimizados */
-        body { margin: 0; padding: 15px; font-family: Arial, sans-serif; }
-        #videoPreview { width: 100%; height: 60vh; transform: scaleX(-1); }
-        #outputText { font-size: 1.2em; margin-top: 15px; padding: 10px; border: 2px solid #2ecc71; border-radius: 8px; }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+        }
+        #videoContainer {
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            position: relative;
+        }
+        #videoElement {
+            width: 100%;
+            height: auto;
+            transform: scaleX(-1);
+            border-radius: 10px;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            font-size: 1.2em;
+            min-height: 60px;
+        }
     </style>
 </head>
 <body>
-    <video id="videoPreview" autoplay playsinline></video>
-    <div id="outputText"></div>
+    <div id="videoContainer">
+        <video id="videoElement" autoplay playsinline></video>
+    </div>
+    <div id="output"></div>
 
-<script>
-// 1. Definir el objeto Vision correctamente
-const vision = window;
-let gestureRecognizer;
-let lastDetection = 0;
-const sentence = [];
+<script type="module">
+import { GestureRecognizer, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.7/vision_bundle.js';
 
-// 2. Mapeo de gestos LSA Argentina
-const GESTURE_MAP = {
-    'Thumb_Up': 'Hola',
-    'Open_Palm': ' ',
-    'Closed_Fist': 'A',
-    'Victory': 'B',
-    'Pointing_Up': 'C',
-    'ILoveYou': 'D',
-    'Thumb_Down': 'E',
-    'Raised_Hand': 'F',
-    'Finger_Heart': 'Gracias',
-    'Hand_Wave': 'Adiós'
-};
-
-// 3. Inicialización corregida
-async function initialize() {
-    try {
-        const fileset = await vision.FilesetResolver.forVisionTasks(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-        );
-        
-        gestureRecognizer = await vision.GestureRecognizer.createFromOptions(
-            fileset,
-            {
-                baseOptions: {
-                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
-                    delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numHands: 2,
-                minHandDetectionConfidence: 0.7
-            }
-        );
-        
-        startCamera();
-    } catch (error) {
-        console.error('Error de inicialización:', error);
-        document.getElementById('outputText').textContent = 'Error al cargar el modelo';
+class SignLanguageTranslator {
+    constructor() {
+        this.recognizer = null;
+        this.video = document.getElementById('videoElement');
+        this.output = document.getElementById('output');
+        this.lastGestureTime = 0;
+        this.sentence = [];
+        this.init();
     }
-}
 
-// 4. Configuración de cámara móvil
-async function startCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: "user",
-                width: { ideal: 360 },
-                height: { ideal: 640 }
-            }
-        });
-        
-        const video = document.getElementById('videoPreview');
-        video.srcObject = stream;
-        
-        video.onloadedmetadata = () => {
-            video.play();
-            detectGestures();
-        };
-    } catch (error) {
-        console.error('Error de cámara:', error);
+    async init() {
+        await this.setupCamera();
+        await this.loadModel();
+        this.detectGestures();
     }
-}
 
-// 5. Detección en tiempo real optimizada
-async function detectGestures() {
-    const video = document.getElementById('videoPreview');
-    
-    while (true) {
-        if (!gestureRecognizer) await new Promise(resolve => setTimeout(resolve, 100));
-        
+    async setupCamera() {
         try {
-            const results = gestureRecognizer.recognizeForVideo(video, Date.now());
-            processResults(results);
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                }
+            });
+            this.video.srcObject = stream;
+            await new Promise(resolve => this.video.onloadedmetadata = resolve);
         } catch (error) {
-            console.error('Error de detección:', error);
-        }
-        
-        await new Promise(resolve => requestAnimationFrame(resolve));
-    }
-}
-
-// 6. Procesamiento de resultados
-function processResults(results) {
-    const currentTime = Date.now();
-    
-    if (results.gestures && results.gestures.length > 0 && (currentTime - lastDetection > 1000)) {
-        const mainGesture = results.gestures[0][0];
-        
-        if (mainGesture.score >= 0.7) {
-            const translation = GESTURE_MAP[mainGesture.categoryName] || '';
-            updateOutput(translation);
-            lastDetection = currentTime;
+            this.output.textContent = 'Error: Permite acceso a la cámara';
+            console.error('Camera error:', error);
         }
     }
-}
 
-// 7. Actualización de la salida
-function updateOutput(text) {
-    sentence.push(text);
-    
-    if (sentence.length > 15) {
-        sentence.splice(0, 5);
+    async loadModel() {
+        try {
+            const vision = await FilesetResolver.forVisionTasks(
+                'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.7/wasm'
+            );
+            
+            this.recognizer = await GestureRecognizer.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task',
+                    delegate: 'GPU'
+                },
+                runningMode: 'VIDEO',
+                numHands: 2,
+                minHandDetectionConfidence: 0.8
+            });
+        } catch (error) {
+            this.output.textContent = 'Error cargando el modelo';
+            console.error('Model load error:', error);
+        }
     }
-    
-    document.getElementById('outputText').textContent = sentence.join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+
+    async detectGestures() {
+        if (!this.recognizer) return;
+
+        const processFrame = async () => {
+            try {
+                const results = this.recognizer.recognizeForVideo(this.video, Date.now());
+                this.processResults(results);
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+            requestAnimationFrame(processFrame);
+        };
+        
+        processFrame();
+    }
+
+    processResults(results) {
+        if (!results.gestures || results.gestures.length === 0) return;
+
+        const currentTime = Date.now();
+        if (currentTime - this.lastGestureTime < 1000) return;
+
+        const gestures = results.gestures[0]
+            .filter(g => g.score >= 0.8)
+            .map(g => this.translateGesture(g.categoryName));
+
+        if (gestures.length > 0) {
+            this.updateSentence(gestures[0]);
+            this.lastGestureTime = currentTime;
+        }
+    }
+
+    translateGesture(gesture) {
+        const gesturesMap = {
+            'Thumb_Up': 'Hola',
+            'Open_Palm': ' ',
+            'Closed_Fist': 'A',
+            'Victory': 'B',
+            'Pointing_Up': 'C',
+            'ILoveYou': 'D',
+            'Thumb_Down': 'E',
+            'Raised_Hand': 'F',
+            'Finger_Heart': 'Gracias',
+            'Hand_Wave': 'Adiós'
+        };
+        return gesturesMap[gesture] || '';
+    }
+
+    updateSentence(text) {
+        this.sentence.push(text);
+        
+        if (this.sentence.length > 15) {
+            this.sentence = this.sentence.slice(-10);
+        }
+        
+        this.output.textContent = this.sentence.join('')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
 }
 
-// Iniciar
-initialize();
+// Iniciar aplicación
+new SignLanguageTranslator();
 </script>
 </body>
 </html>
