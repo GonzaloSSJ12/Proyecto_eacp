@@ -3,21 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>LSA Live Translator</title>
+  <title>Hand Landmark Visualizer</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- MediaPipe Hands -->
+  <!-- MediaPipe Hands + Drawing Utils -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <!-- Fingerpose -->
-  <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.1.0/dist/fingerpose.min.js"></script>
 </head>
 <body>
   <div class="container">
-    <h1>LSA Live Translator</h1>
     <video id="video" autoplay playsinline></video>
-    <div id="status">Estado: inicializando...</div>
-    <div id="output">Traducción: —</div>
+    <canvas id="canvas"></canvas>
   </div>
-  <script src="js/app.js"></script>
+  <script src="js/handDraw.js"></script>
 </body>
 </html>
