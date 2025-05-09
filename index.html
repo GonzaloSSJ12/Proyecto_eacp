@@ -3,68 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seguimiento de Mano</title>
+  <title>Seguimiento de Manos y Gestos</title>
   <style>
-    body { display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; background: #f0f0f0; }
-    video, canvas { border: 2px solid #333; border-radius: 8px; }
-    canvas { position: absolute; top: 20px; }
-    #container { position: relative; width: 640px; height: 480px; }
+    body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; margin: 0; padding: 20px; font-family: sans-serif; }
+    video, canvas { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); }
+    video { z-index: 1; }
+    canvas { z-index: 2; }
+    #message { margin-top: 520px; font-size: 1.5em; color: #333; }
   </style>
 </head>
 <body>
-  <h1>Detector y Seguimiento de Mano</h1>
-  <div id="container">
-    <video id="video" width="640" height="480" autoplay muted></video>
-    <canvas id="overlay" width="640" height="480"></canvas>
-  </div>
+  <video id="video" width="640" height="480" autoplay muted></video>
+  <canvas id="overlay" width="640" height="480"></canvas>
+  <div id="message"></div>
 
-  <!-- Incluir librería MediaPipe Hands -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  
   <script>
     const videoElement = document.getElementById('video');
     const canvasElement = document.getElementById('overlay');
     const ctx = canvasElement.getContext('2d');
+    const messageEl = document.getElementById('message');
 
-    // Configurar MediaPipe Hands
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.5
-    });
-
+    // Inicializar MediaPipe Hands para 2 manos
+    const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+    hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
     hands.onResults(onResults);
 
-    // Inicializar la cámara
-    const camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await hands.send({ image: videoElement });
-      },
-      width: 640,
-      height: 480
-    });
+    // Iniciar cámara
+    const camera = new Camera(videoElement, { onFrame: async () => await hands.send({ image: videoElement }), width: 640, height: 480 });
     camera.start();
 
-    // Función que dibuja puntos y líneas sobre la mano detectada
     function onResults(results) {
-      // Limpiar canvas
       ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      messageEl.textContent = '';
 
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      if (results.multiHandLandmarks) {
         for (const landmarks of results.multiHandLandmarks) {
-          // Dibujar conexiones entre puntos
           drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-          // Dibujar puntos de cada landmark
           drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
         }
+        // Detectar gesto en la primera mano
+        const fingers = countFingers(results.multiHandLandmarks[0]);
+        if (fingers === 5) messageEl.textContent = '¡Hola!';
       }
+    }
+
+    // Cuenta dedos extendidos (excepto pulgar)
+    function countFingers(landmarks) {
+      const tips = [8, 12, 16, 20]; // índices de los dedos
+      let count = 0;
+      for (let tip of tips) {
+        if (landmarks[tip].y < landmarks[tip - 2].y) count++;
+      }
+      // Para pulgar, comparar eje X
+      if (landmarks[4].x < landmarks[3].x) count++;
+      return count;
     }
   </script>
 </body>
