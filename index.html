@@ -8,7 +8,8 @@
     body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; margin: 0; padding: 20px; font-family: sans-serif; }
     #container { position: relative; width: 640px; height: 480px; }
     video, canvas { position: absolute; top: 0; left: 0; width: 640px; height: 480px; }
-    #message { margin-top: 500px; font-size: 1.5em; color: #333; }
+    #message { margin-top: 500px; font-size: 1.2em; color: #333; width: 640px; text-align: left; }
+    .msg { margin-bottom: 5px; }
   </style>
 </head>
 <body>
@@ -24,18 +25,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script>
     const videoElement = document.getElementById('video');
-    const canvasElement = document.getElementById('overlay');
-    canvasElement.width = 640;
-    canvasElement.height = 480;
-    const ctx = canvasElement.getContext('2d');
+    const canvas = document.getElementById('overlay');
+    canvas.width = 640; canvas.height = 480;
+    const ctx = canvas.getContext('2d');
     const messageEl = document.getElementById('message');
+    const messages = [];
 
-    // MediaPipe Hands configurado para 2 manos
+    // Parámetros de confirmación de gesto
+    let lastGesture = null;
+    let lastTime = 0;
+    const confirmDelay = 500; // ms
+
+    // Inicializar MediaPipe Hands para 2 manos
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
     hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
     hands.onResults(onResults);
 
-    // Desestructurar utilidades de dibujo
     const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
 
     // Iniciar cámara
@@ -47,39 +52,51 @@
     camera.start();
 
     function onResults(results) {
-      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      messageEl.textContent = '';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        results.multiHandLandmarks.forEach((landmarks) => {
+        // Dibujar manos
+        results.multiHandLandmarks.forEach(landmarks => {
           drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-          drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
+          drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1, radius: 4 });
         });
-        // Detectar gesto en primera mano
-        const fingers = countFingers(results.multiHandLandmarks[0]);
-        if (fingers === 5) {
-          messageEl.textContent = '¡Hola!';
-        } else if (fingers === 0) {
-          messageEl.textContent = 'Seña LSA: Puño (Fist)';
+        // Detectar gesto en la primera mano
+        const gesture = recognizeGesture(results.multiHandLandmarks[0]);
+        const now = performance.now();
+        if (gesture && gesture === lastGesture && now - lastTime > confirmDelay) {
+          // Confirmado
+          addMessage(gesture);
+          lastTime = now;
+        } else if (gesture && gesture !== lastGesture) {
+          // Nuevo gesto, esperar confirmación
+          lastGesture = gesture;
+          lastTime = now;
         }
       }
     }
 
-    // Cuenta dedos extendidos (pulgar comparando eje X, dedos resto eje Y)
-    function countFingers(landmarks) {
-      let count = 0;
-      // Dedos índice, medio, anular y meñique
-      [8, 12, 16, 20].forEach(tip => {
-        if (landmarks[tip].y < landmarks[tip - 2].y) count++;
-      });
-      // Pulgar: si mano derecha, x del tip < x de ip; si izquierda, al revés
-      const isRight = landmarks[17].x < landmarks[5].x;
-      if (isRight) {
-        if (landmarks[4].x < landmarks[3].x) count++;
-      } else {
-        if (landmarks[4].x > landmarks[3].x) count++;
-      }
-      return count;
+    function recognizeGesture(landmarks) {
+      const f = countFingers(landmarks);
+      if (f === 5) return 'Hola';
+      if (f === 0) return 'Puño (Fist)';
+      // Aquí se pueden agregar más gestos de LSA
+      return null;
+    }
+
+    function countFingers(l) {
+      let c = 0;
+      [8,12,16,20].forEach(tip => { if (l[tip].y < l[tip-2].y) c++; });
+      // Pulgar
+      const right = l[17].x < l[5].x;
+      if (right ? l[4].x < l[3].x : l[4].x > l[3].x) c++;
+      return c;
+    }
+
+    function addMessage(text) {
+      const div = document.createElement('div');
+      div.className = 'msg';
+      div.textContent = text;
+      messageEl.appendChild(div);
     }
   </script>
 </body>
