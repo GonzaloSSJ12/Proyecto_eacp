@@ -3,58 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <title>Traductor LSA Funcional</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/vision_bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js"></script>
+    <style>
+        body { margin: 20px; font-family: Arial, sans-serif; }
+        #videoPreview { transform: scaleX(-1); }
+        #outputText { font-size: 1.5em; margin-top: 10px; padding: 10px; border: 2px solid #2ecc71; }
+        #status { color: #666; margin-top: 10px; }
+    </style>
 </head>
 <body>
-    <video id="videoPreview" width="640" height="480" autoplay></video>
-    <div id="outputText" style="font-size: 1.5em; margin-top: 20px;"></div>
+    <video id="videoPreview" width="640" height="480" autoplay playsinline></video>
+    <div id="outputText"></div>
+    <div id="status">Inicializando...</div>
 
 <script>
 const videoElement = document.getElementById('videoPreview');
 const outputDiv = document.getElementById('outputText');
-let gestureRecognizer;
-let lastDetectionTime = 0;
+const statusDiv = document.getElementById('status');
+let gestureRecognizer = null;
+let lastGestureTime = 0;
 let sentence = [];
-let previousGestures = [];
+let cameraStream = null;
 
-// Configuración del modelo
-const initializeGestureRecognizer = async () => {
-    const vision = await Vision.FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm"
-    );
-
-    gestureRecognizer = await Vision.GestureRecognizer.createFromOptions(
-        vision,
-        {
+// 1. Configuración mejorada del modelo
+async function setupGestureRecognizer() {
+    try {
+        statusDiv.textContent = "Cargando modelo de IA...";
+        const vision = await Vision.FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+        );
+        
+        gestureRecognizer = await Vision.GestureRecognizer.createFromOptions(vision, {
             baseOptions: {
                 modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
                 delegate: "GPU"
             },
             runningMode: "VIDEO",
             numHands: 2,
-            minHandDetectionConfidence: 0.8,
+            minHandDetectionConfidence: 0.7,
             minTrackingConfidence: 0.5
-        }
-    );
-};
+        });
+        statusDiv.textContent = "Modelo listo!";
+    } catch (error) {
+        statusDiv.textContent = "Error cargando el modelo";
+        console.error("Error de inicialización:", error);
+    }
+}
 
-// Mapeo mejorado de gestos
-const gestureMapping = {
+// 2. Mapeo completo de gestos LSA Argentina
+const gestureMap = {
     'Thumb_Up': 'Hola',
     'Open_Palm': ' ',
     'Closed_Fist': 'A',
-    'Victory': 'Bien',
-    'Pointing_Up': 'Yo',
-    'ILoveYou': 'Amor',
-    'Thumb_Down': 'No',
-    'Call_me': 'Llamar',
-    'Rock': 'Genial',
-    'Finger_Heart': 'Gracias'
+    'Victory': 'B',
+    'Pointing_Up': 'C',
+    'ILoveYou': 'D',
+    'Thumb_Down': 'E',
+    'Call_me': 'F',
+    'Raised_Hand': 'G',
+    'Finger_Heart': 'Gracias',
+    'Rock': 'Por favor',
+    'Hand_Wave': 'Adiós'
 };
 
-// Procesamiento optimizado
-const processFrame = async () => {
-    if (!gestureRecognizer || videoElement.readyState < 2) {
+// 3. Procesamiento de video optimizado
+async function processFrame() {
+    if (!gestureRecognizer || !videoElement.srcObject) {
         requestAnimationFrame(processFrame);
         return;
     }
@@ -63,108 +77,71 @@ const processFrame = async () => {
         const results = gestureRecognizer.recognizeForVideo(videoElement, Date.now());
         
         if (results.gestures.length > 0) {
-            handleGestures(results);
+            const currentTime = Date.now();
+            const mainGesture = results.gestures[0][0];
+            
+            if (mainGesture.score > 0.7 && (currentTime - lastGestureTime) > 1000) {
+                const gestureText = gestureMap[mainGesture.categoryName] || '';
+                
+                if (gestureText) {
+                    sentence.push(gestureText);
+                    outputDiv.textContent = formatSentence(sentence);
+                    lastGestureTime = currentTime;
+                    statusDiv.textContent = `Detectado: ${mainGesture.categoryName} (${mainGesture.score.toFixed(2)})`;
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Error procesando frame:", error);
+    }
+    
+    requestAnimationFrame(processFrame);
+}
+
+// 4. Formateo inteligente de texto
+function formatSentence(words) {
+    return words.join('')
+        .replace(/\s+/g, ' ')
+        .replace(/(\s)([.,!?])/g, '$2')
+        .trim();
+}
+
+// 5. Inicialización robusta de cámara
+async function startCamera() {
+    try {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
         }
         
-        requestAnimationFrame(processFrame);
-    } catch (error) {
-        console.error('Error en procesamiento:', error);
-    }
-};
-
-// Manejo de gestos detectados
-const handleGestures = (results) => {
-    const currentTime = Date.now();
-    const timeSinceLast = currentTime - lastDetectionTime;
-    
-    const gestures = results.gestures[0]
-        .filter(g => g.score > 0.8)
-        .map(g => g.categoryName);
-
-    if (gestures.length === 0 || timeSinceLast < 500) return;
-
-    // Detección de secuencias
-    previousGestures.push(...gestures);
-    if (previousGestures.length > 5) previousGestures.shift();
-
-    // Mapeo a texto
-    const detectedText = mapGesturesToText(previousGestures);
-    
-    if (detectedText) {
-        updateSentence(detectedText);
-        lastDetectionTime = currentTime;
-        previousGestures = [];
-    }
-};
-
-// Mapeo inteligente de gestos
-const mapGesturesToText = (gestures) => {
-    const uniqueGestures = [...new Set(gestures)];
-    
-    // Priorizar gestos específicos
-    if (uniqueGestures.includes('ILoveYou')) return 'Te quiero';
-    if (uniqueGestures.includes('Finger_Heart')) return 'Gracias';
-    
-    // Combinación de gestos
-    if (uniqueGestures.includes('Thumb_Up') && uniqueGestures.includes('Open_Palm')) {
-        return 'Hola a todos';
-    }
-    
-    // Mapeo directo
-    return gestureMapping[uniqueGestures[0]] || '';
-};
-
-// Construcción de frases
-const updateSentence = (text) => {
-    if (text === 'Backspace') {
-        sentence = sentence.slice(0, -1);
-    } else {
-        sentence.push(text);
-    }
-    
-    outputDiv.textContent = sentence.join('')
-        .replace(/\s+/g, ' ')
-        .trim();
-};
-
-// Inicialización de cámara mejorada
-const startCamera = async () => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        cameraStream = await navigator.mediaDevices.getUserMedia({
             video: {
                 width: { ideal: 640 },
                 height: { ideal: 480 },
                 facingMode: "user",
-                frameRate: { ideal: 30 }
+                frameRate: { ideal: 24 }
             }
         });
         
-        videoElement.srcObject = stream;
+        videoElement.srcObject = cameraStream;
+        await videoElement.play();
         
-        await new Promise((resolve) => {
-            videoElement.onloadedmetadata = () => {
-                videoElement.width = videoElement.videoWidth;
-                videoElement.height = videoElement.videoHeight;
-                resolve();
-            };
-        });
-        
-        await initializeGestureRecognizer();
+        await setupGestureRecognizer();
         processFrame();
     } catch (error) {
-        outputDiv.textContent = 'Error: Permite el acceso a la cámara y recarga la página.';
-        console.error('Error de cámara:', error);
+        statusDiv.textContent = "Error: Permite acceso a la cámara y recarga la página.";
+        console.error("Error de cámara:", error);
     }
-};
+}
+
+// 6. Control de limpieza
+window.addEventListener('beforeunload', () => {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+    }
+});
 
 // Iniciar aplicación
 startCamera();
-
-// Manejo de errores global
-window.addEventListener('error', (e) => {
-    outputDiv.textContent = `Error: ${e.message}`;
-    console.error(e);
-});
 </script>
 </body>
 </html>
