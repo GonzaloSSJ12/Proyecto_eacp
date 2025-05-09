@@ -2,517 +2,157 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Traductor LSA Argentina Completo</title>
+    <title>Traductor LSA con IA</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"></script>
     <style>
-        :root {
-            --primary-color: #2ecc71;
-            --secondary-color: #3498db;
-            --background-color: #2c3e50;
-            --text-color: #ecf0f1;
-        }
-
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: var(--background-color);
-            color: var(--text-color);
-            font-family: 'Arial', sans-serif;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-
-        #videoContainer {
-            position: relative;
-            width: 640px;
-            height: 480px;
-            margin: 20px;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 0 20px rgba(46, 204, 113, 0.3);
-        }
-
-        #videoElement, #canvasElement {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-        }
-
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .button {
-            padding: 12px 25px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 16px;
-        }
-
-        .button:hover {
-            background-color: #27ae60;
-            transform: scale(1.05);
-        }
-
-        #outputSection {
-            width: 640px;
-            background-color: #34495e;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-            position: relative;
-        }
-
-        #outputText {
-            width: 100%;
-            height: 120px;
-            padding: 15px;
-            font-size: 1.2em;
-            border: 2px solid var(--primary-color);
-            border-radius: 10px;
-            background-color: #2c3e50;
-            color: white;
-            resize: none;
-        }
-
-        #gestureHistory {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #2c3e50;
-            border-radius: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .gesture-item {
-            padding: 8px;
-            margin: 5px 0;
-            background-color: var(--background-color);
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        #statusIndicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: #e74c3c;
-            box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
-        }
-
-        .instructions {
-            margin: 20px;
-            padding: 20px;
-            background-color: #34495e;
-            border-radius: 10px;
-            max-width: 640px;
-        }
-
-        #gestureGuide {
-            position: fixed;
-            top: 60px;
-            right: 20px;
-            background-color: #34495e;
-            padding: 15px;
-            border-radius: 10px;
-            max-width: 300px;
-            display: none;
-        }
-
-        .correction-suggestion {
-            background-color: var(--primary-color);
-            padding: 5px 10px;
-            margin: 5px;
-            border-radius: 15px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .correction-suggestion:hover {
-            background-color: #27ae60;
-        }
-
-        #trainingOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .training-content {
-            background-color: var(--background-color);
-            padding: 20px;
-            border-radius: 10px;
-            width: 80%;
-            max-width: 500px;
-        }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        #videoPreview { transform: scaleX(-1); }
+        #outputText { font-size: 1.5em; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <h1>Traductor LSA Argentina Profesional</h1>
-    <div id="statusIndicator"></div>
-    <div id="gestureGuide">
-        <h3>Guía de Gestos</h3>
-        <div id="gestureList"></div>
-    </div>
+    <video id="videoPreview" width="640" height="480" autoplay></video>
+    <div id="outputText"></div>
 
-    <div class="instructions">
-        <h3>Instrucciones:</h3>
-        <p>• Mantén gestos por 1 segundo para registrar<br>
-           • Usa ambas manos para letras compuestas<br>
-           • Consulta la guía de gestos (Botón 'G')<br>
-           • Corrige el texto con sugerencias</p>
-    </div>
+<script>
+const videoElement = document.getElementById('videoPreview');
+const outputDiv = document.getElementById('outputText');
+let gestureRecognizer;
+let lastGesture = '';
+let sentence = [];
+let lastDetectionTime = 0;
 
-    <div id="videoContainer">
-        <video id="videoElement" autoplay></video>
-        <canvas id="canvasElement"></canvas>
-    </div>
+// Configuración del modelo de IA
+const initializeGestureRecognizer = async () => {
+    const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+    );
 
-    <div class="controls">
-        <button class="button" onclick="clearText()">Limpiar</button>
-        <button class="button" onclick="copyText()">Copiar</button>
-        <button class="button" onclick="toggleCamera()">Cámara</button>
-        <button class="button" onclick="toggleGuide()">Guía</button>
-        <button class="button" onclick="showTraining()">Entrenar</button>
-        <button class="button" onclick="toggleCorrections()">Corregir</button>
-    </div>
-
-    <div id="outputSection">
-        <textarea id="outputText" placeholder="Texto traducido aparecerá aquí..." readonly></textarea>
-        <div id="corrections"></div>
-        <div id="gestureHistory"></div>
-    </div>
-
-    <div id="trainingOverlay">
-        <div class="training-content">
-            <h2>Modo Entrenamiento</h2>
-            <p>Realiza el gesto 3 veces para calibrar</p>
-            <div id="trainingProgress"></div>
-            <button class="button" onclick="cancelTraining()">Cancelar</button>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/typo-js/typo.js"></script>
-
-    <script>
-        const videoElement = document.getElementById('videoElement');
-        const canvasElement = document.getElementById('canvasElement');
-        const canvasCtx = canvasElement.getContext('2d');
-        const outputText = document.getElementById('outputText');
-        const statusIndicator = document.getElementById('statusIndicator');
-        const gestureHistory = document.getElementById('gestureHistory');
-        const correctionsDiv = document.getElementById('corrections');
-        const gestureGuide = document.getElementById('gestureGuide');
-        const trainingOverlay = document.getElementById('trainingOverlay');
-
-        let currentGesture = null;
-        let gestureStartTime = 0;
-        let currentText = '';
-        let isCameraOn = true;
-        let correctionsEnabled = true;
-        let trainingMode = false;
-        let trainingData = [];
-        const dictionary = new Typo('es');
-
-        // Configuración extendida de LSA Argentina
-        const lsaGestures = {
-            'A': {
-                name: 'A',
-                check: (landmarks) => isClosedFist(landmarks),
-                confidence: 10,
-                color: '#e74c3c'
+    gestureRecognizer = await GestureRecognizer.createFromOptions(
+        vision,
+        {
+            baseOptions: {
+                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+                delegate: "GPU"
             },
-            'B': {
-                name: 'B',
-                check: (landmarks) => isOpenHand(landmarks),
-                confidence: 15,
-                color: '#2ecc71'
-            },
-            'C': {
-                name: 'C',
-                check: (landmarks) => isCOrientation(landmarks),
-                confidence: 12,
-                color: '#3498db'
-            },
-            '1': {
-                name: '1',
-                check: (landmarks) => checkFingersUp(landmarks)[1],
-                confidence: 10,
-                color: '#9b59b6'
-            },
-            ' ': {
-                name: 'Espacio',
-                check: (landmarks) => isWaveMovement(landmarks),
-                confidence: 8,
-                color: '#f1c40f'
-            },
-            // Agregar más gestos aquí...
-        };
-
-        const compoundGestures = {
-            'HOLA': ['H', 'O', 'L', 'A'],
-            'GRACIAS': ['G', 'R', 'A', 'C', 'I', 'A', 'S']
-        };
-
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
-        });
-
-        hands.onResults(processResults);
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                if(isCameraOn) await hands.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
-        });
-
-        camera.start();
-
-        function processResults(results) {
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.multiHandLandmarks) {
-                results.multiHandLandmarks.forEach((landmarks, index) => {
-                    drawLandmarks(landmarks);
-                    detectGesture(landmarks, results.multiHandedness[index]);
-                });
+            runningMode: "VIDEO",
+            cannedGesturesClassifierOptions: {
+                scoreThreshold: 0.7
             }
+        }
+    );
+};
+
+// Mapeo de gestos a texto (personalizable)
+const gestureMapping = {
+    'Thumb_Up': 'Hola',
+    'Open_Palm': ' ',
+    'Closed_Fist': 'A',
+    'Victory': 'Bien',
+    'Pointing_Up': 'Yo',
+    'ILoveYou': 'Amor',
+    'Thumb_Down': 'No',
+    'Call_me': 'Llamar'
+};
+
+// Procesamiento en tiempo real
+const processFrame = async () => {
+    if (!gestureRecognizer) return;
+
+    const now = performance.now();
+    const results = gestureRecognizer.recognizeForVideo(videoElement, now);
+
+    if (results.gestures.length > 0) {
+        const gesture = results.gestures[0][0];
+        const currentTime = Date.now();
+        
+        if (gesture.score > 0.8 && currentTime - lastDetectionTime > 1000) {
+            const gestureName = gesture.categoryName;
+            const text = gestureMapping[gestureName] || gestureName;
             
-            updateStatusIndicator(results.multiHandLandmarks?.length > 0);
-            canvasCtx.restore();
+            updateSentence(text);
+            lastDetectionTime = currentTime;
         }
+    }
+    
+    requestAnimationFrame(processFrame);
+};
 
-        function drawLandmarks(landmarks) {
-            canvasCtx.beginPath();
-            landmarks.forEach(landmark => {
-                canvasCtx.fillStyle = '#00ff00';
-                canvasCtx.arc(landmark.x * canvasElement.width,
-                              landmark.y * canvasElement.height,
-                              5, 0, 2 * Math.PI);
-                canvasCtx.fill();
-            });
-        }
+// Construcción de frases
+const updateSentence = (text) => {
+    if (text === ' ') {
+        sentence.push(' ');
+    } else if (text === 'Backspace') {
+        sentence.pop();
+    } else {
+        sentence.push(text);
+    }
+    
+    outputDiv.textContent = sentence.join('')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
 
-        function detectGesture(landmarks, handedness) {
-            if(trainingMode) return handleTraining(landmarks);
-            
-            let detected = null;
-            
-            for (const [key, gesture] of Object.entries(lsaGestures)) {
-                if (gesture.check(landmarks)) {
-                    detected = key;
-                    break;
-                }
-            }
+// Inicialización de la cámara
+const startCamera = async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: "user" }
+        });
+        videoElement.srcObject = stream;
+        
+        await new Promise(resolve => {
+            videoElement.onloadedmetadata = resolve;
+        });
+        
+        await initializeGestureRecognizer();
+        processFrame();
+    } catch (error) {
+        console.error('Error al acceder a la cámara:', error);
+    }
+};
 
-            if (detected) {
-                if (currentGesture === detected) {
-                    const duration = Date.now() - gestureStartTime;
-                    if (duration > gesture.confidence * 100) {
-                        handleDetectedGesture(detected);
-                        currentGesture = null;
-                    }
-                } else {
-                    currentGesture = detected;
-                    gestureStartTime = Date.now();
-                }
-            } else {
-                currentGesture = null;
-            }
-        }
+// Manejo de secuencias complejas
+const checkComplexGestures = (landmarks) => {
+    // Lógica para detectar movimientos compuestos
+    const wrist = landmarks[0];
+    const fingerTips = landmarks.slice(8, 21);
+    
+    // Ejemplo: Detectar movimiento circular
+    const movementPattern = fingerTips.map(tip => ({
+        x: tip.x - wrist.x,
+        y: tip.y - wrist.y
+    }));
+    
+    if (isCircularMotion(movementPattern)) {
+        updateSentence('Por favor');
+    }
+};
 
-        function handleDetectedGesture(gesture) {
-            addToText(gesture);
-            addToHistory(gesture);
-            checkCompoundGestures();
-            if(correctionsEnabled) checkSpelling();
-        }
+const isCircularMotion = (points) => {
+    // Lógica de detección de movimiento circular
+    const deltas = points.slice(1).map((p, i) => ({
+        dx: p.x - points[i].x,
+        dy: p.y - points[i].y
+    }));
+    
+    const directionChanges = deltas.filter((d, i) => {
+        if (i === 0) return false;
+        const prev = deltas[i - 1];
+        return (Math.sign(d.dx) !== Math.sign(prev.dx) || 
+               (Math.sign(d.dy) !== Math.sign(prev.dy));
+    });
+    
+    return directionChanges.length > 5;
+};
 
-        function checkCompoundGestures() {
-            const lastFour = currentText.slice(-4);
-            for(const [word, sequence] of Object.entries(compoundGestures)) {
-                if(lastFour.endsWith(sequence.join(''))) {
-                    currentText = currentText.slice(0, -sequence.length) + word;
-                    outputText.value = currentText;
-                    break;
-                }
-            }
-        }
+// Iniciar aplicación
+startCamera();
 
-        async function checkSpelling() {
-            const words = currentText.split(' ');
-            const lastWord = words.pop();
-            if(!lastWord) return;
-
-            const suggestions = dictionary.suggest(lastWord);
-            if(suggestions.length > 0) {
-                correctionsDiv.innerHTML = suggestions.slice(0, 3)
-                    .map(word => `<div class="correction-suggestion" onclick="applyCorrection('${word}')">${word}</div>`)
-                    .join('');
-            }
-        }
-
-        function applyCorrection(word) {
-            const words = currentText.split(' ');
-            words.pop();
-            currentText = words.join(' ') + ' ' + word;
-            outputText.value = currentText;
-            correctionsDiv.innerHTML = '';
-        }
-
-        function handleTraining(landmarks) {
-            // Lógica de entrenamiento personalizado
-            trainingData.push(landmarks);
-            if(trainingData.length >= 3) {
-                finishTraining();
-            }
-        }
-
-        function finishTraining() {
-            trainingMode = false;
-            trainingOverlay.style.display = 'none';
-            // Aquí se implementaría la lógica para guardar los datos de entrenamiento
-            alert('Entrenamiento completado!');
-        }
-
-        function updateStatusIndicator(handDetected) {
-            statusIndicator.style.backgroundColor = handDetected ? '#2ecc71' : '#e74c3c';
-        }
-
-        function addToText(letter) {
-            currentText += letter;
-            outputText.value = currentText;
-            outputText.scrollTop = outputText.scrollHeight;
-        }
-
-        function addToHistory(gesture) {
-            const historyItem = document.createElement('div');
-            historyItem.className = 'gesture-item';
-            historyItem.innerHTML = `
-                <span>${new Date().toLocaleTimeString()}</span>
-                <strong style="color: ${lsaGestures[gesture]?.color || '#fff'}">${gesture}</strong>
-            `;
-            gestureHistory.prepend(historyItem);
-        }
-
-        function toggleGuide() {
-            gestureGuide.style.display = gestureGuide.style.display === 'block' ? 'none' : 'block';
-            populateGestureGuide();
-        }
-
-        function populateGestureGuide() {
-            const gestureList = document.getElementById('gestureList');
-            gestureList.innerHTML = Object.entries(lsaGestures)
-                .map(([key, gesture]) => `
-                    <div style="margin: 10px 0; padding: 10px; background: ${gesture.color}22; border-radius: 5px;">
-                        <strong>${key}:</strong> ${gesture.name}
-                    </div>
-                `).join('');
-        }
-
-        function showTraining() {
-            trainingMode = true;
-            trainingOverlay.style.display = 'flex';
-        }
-
-        function cancelTraining() {
-            trainingMode = false;
-            trainingOverlay.style.display = 'none';
-            trainingData = [];
-        }
-
-        function toggleCorrections() {
-            correctionsEnabled = !correctionsEnabled;
-            correctionsDiv.innerHTML = correctionsEnabled ? 
-                '<div style="color: #2ecc71;">Correcciones activadas</div>' : 
-                '<div style="color: #e74c3c;">Correcciones desactivadas</div>';
-            setTimeout(() => correctionsDiv.innerHTML = '', 2000);
-        }
-
-        // Funciones de utilidad para gestos
-        function isClosedFist(landmarks) {
-            const fingerTips = [8, 12, 16, 20];
-            return fingerTips.every(tip => landmarks[tip].y > landmarks[tip - 3].y);
-        }
-
-        function isOpenHand(landmarks) {
-            const fingerTips = [8, 12, 16, 20];
-            return fingerTips.every(tip => landmarks[tip].y < landmarks[tip - 3].y);
-        }
-
-        function checkFingersUp(landmarks) {
-            const fingers = {};
-            const fingerTips = [4, 8, 12, 16, 20];
-            const fingerJoints = [3, 6, 10, 14, 18];
-
-            fingerTips.forEach((tip, index) => {
-                fingers[index] = landmarks[tip].y < landmarks[fingerJoints[index]].y;
-            });
-
-            return fingers;
-        }
-
-        window.onload = () => {
-            canvasElement.width = videoElement.offsetWidth;
-            canvasElement.height = videoElement.offsetHeight;
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .catch(err => {
-                    console.error('Error de cámara:', err);
-                    statusIndicator.style.backgroundColor = '#e74c3c';
-                });
-        };
-
-        // Funciones de control
-        function clearText() {
-            currentText = '';
-            outputText.value = '';
-            gestureHistory.innerHTML = '';
-            correctionsDiv.innerHTML = '';
-        }
-
-        function copyText() {
-            navigator.clipboard.writeText(outputText.value);
-        }
-
-        function toggleCamera() {
-            isCameraOn = !isCameraOn;
-            if(isCameraOn) camera.start();
-        }
-    </script>
+// Manejo de errores
+window.addEventListener('error', (e) => {
+    outputDiv.textContent = `Error: ${e.message}`;
+});
+</script>
 </body>
 </html>
