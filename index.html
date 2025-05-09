@@ -1,114 +1,183 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Detección de Gestos con MediaPipe</title>
-  <style>
-    body {
-      margin: 0;
-      background: #fafafa;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    #video {
-      position: relative;
-      width: 640px;
-      height: 480px;
-      background: #000;
-    }
-    #canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 640px;
-      height: 480px;
-      pointer-events: none;
-    }
-    #log {
-      margin-top: 10px;
-      width: 640px;
-      font-size: 1.2em;
-      color: #333;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Traductor de LSA Argentina</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #videoContainer {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 20px;
+        }
+        
+        #videoElement {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+        
+        #canvasElement {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+        
+        #outputText {
+            width: 640px;
+            height: 100px;
+            margin: 20px;
+            padding: 10px;
+            font-size: 1.2em;
+            border: 2px solid #333;
+            border-radius: 5px;
+        }
+        
+        .button {
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-  <h2>Detección de Gestos (MediaPipe)</h2>
-  <div style="position: relative; width: 640px; height: 480px;">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas"></canvas>
-  </div>
-  <div id="log">Esperando gesto...</div>
+    <h1>Traductor de Lengua de Señas Argentina</h1>
+    
+    <div id="videoContainer">
+        <video id="videoElement" autoplay></video>
+        <canvas id="canvasElement"></canvas>
+    </div>
+    
+    <textarea id="outputText" placeholder="Texto traducido aparecerá aquí..." readonly></textarea>
+    <button class="button" onclick="clearText()">Limpiar texto</button>
 
-  <!-- Carga de MediaPipe -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const log = document.getElementById('log');
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 
-    async function init() {
-      // Verifica si getUserMedia está disponible
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        log.textContent = 'getUserMedia no es compatible con este navegador.';
-        return;
-      }
+    <script>
+        const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementById('canvasElement');
+        const canvasCtx = canvasElement.getContext('2d');
+        const outputText = document.getElementById('outputText');
+        
+        let lastGesture = '';
+        let currentText = '';
+        let gestureBuffer = [];
 
-      // Solicita acceso a la cámara
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-      } catch (err) {
-        console.error('Error al acceder a la cámara:', err);
-        log.textContent = 'No se pudo acceder a la cámara.';
-        return;
-      }
-
-      // Espera a que el video esté listo
-      video.addEventListener('loadedmetadata', async () => {
-        video.play();
-
-        // Carga y configura el reconocedor de gestos
-        const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-        );
-
-        const gestureRecognizer = await GestureRecognizer.createFromModelPath(
-          vision,
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/gesture_recognizer.task'
-        );
-
-        // Procesa cada cuadro de video
-        async function processFrame() {
-          const results = gestureRecognizer.recognizeForVideo(video, performance.now());
-
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          if (results.handednesses.length > 0) {
-            for (let i = 0; i < results.handednesses.length; i++) {
-              const landmarks = results.landmarks[i];
-              drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-              drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
-
-              const gesture = results.gestures[i][0];
-              log.textContent = `Mano ${i + 1}: ${gesture.categoryName} (${(gesture.score * 100).toFixed(1)}%)`;
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
             }
-          } else {
-            log.textContent = 'Sin gesto claro';
-          }
+        });
 
-          requestAnimationFrame(processFrame);
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(processResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+
+        camera.start();
+
+        function processResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            
+            if (results.multiHandLandmarks) {
+                results.multiHandLandmarks.forEach(landmarks => {
+                    drawLandmarks(landmarks);
+                    detectGesture(landmarks);
+                });
+            }
+            canvasCtx.restore();
         }
 
-        processFrame();
-      });
-    }
+        function drawLandmarks(landmarks) {
+            canvasCtx.beginPath();
+            for (const landmark of landmarks) {
+                canvasCtx.fillStyle = '#FF0000';
+                canvasCtx.arc(landmark.x * canvasElement.width,
+                             landmark.y * canvasElement.height,
+                             5, 0, 2 * Math.PI);
+                canvasCtx.fill();
+            }
+        }
 
-    init();
-  </script>
+        function detectGesture(landmarks) {
+            // Esta es una implementación básica de ejemplo
+            // Deberías implementar la lógica específica para LSA Argentina
+            
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const middleTip = landmarks[12];
+            
+            // Detectar letra "A" (puño cerrado)
+            if (thumbTip.y < indexTip.y && thumbTip.y < middleTip.y) {
+                updateText('A');
+            }
+            // Detectar letra "B" (mano abierta)
+            else if (thumbTip.y > indexTip.y && thumbTip.y > middleTip.y) {
+                updateText('B');
+            }
+            // Añadir más gestos según LSA Argentina...
+        }
+
+        function updateText(letter) {
+            if (letter !== lastGesture) {
+                gestureBuffer.push(letter);
+                lastGesture = letter;
+                
+                if (gestureBuffer.length > 5) { // Esperar varios frames para confirmar
+                    currentText += gestureBuffer[2]; // Tomar el gesto más frecuente
+                    outputText.value = currentText;
+                    gestureBuffer = [];
+                }
+            }
+        }
+
+        function clearText() {
+            currentText = '';
+            outputText.value = '';
+        }
+
+        // Mapeo de gestos a letras (ejemplo simplificado)
+        const lsaMapping = {
+            'A': 'A',
+            'B': 'B',
+            // Agregar más mapeos según LSA Argentina
+        };
+
+        window.onload = () => {
+            canvasElement.width = videoElement.offsetWidth;
+            canvasElement.height = videoElement.offsetHeight;
+        };
+    </script>
 </body>
 </html>
