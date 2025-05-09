@@ -3,22 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gestos con MediaPipe (corregido)</title>
+  <title>Detección de Gestos con MediaPipe</title>
   <style>
-    body { margin: 0; background: #fafafa; display: flex; flex-direction: column; align-items: center; }
-    #video {
+    body {
+      margin: 0;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #video, #canvas {
       position: absolute;
       top: 50px;
       width: 640px;
       height: 480px;
-      z-index: 1;
     }
     #canvas {
-      position: absolute;
-      top: 50px;
-      width: 640px;
-      height: 480px;
-      z-index: 2;
+      z-index: 1;
       pointer-events: none;
     }
     #log {
@@ -30,12 +31,12 @@
   </style>
 </head>
 <body>
-  <h2>Detección de Gestos (MediaPipe)</h2>
-  <!-- 1) Video con playsinline y dimensión explícita -->
+  <h2>Detección de Gestos con MediaPipe</h2>
   <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
   <div id="log">Esperando gesto...</div>
 
+  <!-- Carga de MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest"></script>
   <script>
     const { FilesetResolver, GestureRecognizer, GestureRecognizerModelConfig, VisionRunningMode } = window;
@@ -61,31 +62,33 @@
       const ctx = canvas.getContext('2d');
       const log = document.getElementById('log');
 
-      // 2) Solicitar cámara con dimensiones preferidas
-      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-        .then(stream => {
-          video.srcObject = stream;
-          video.addEventListener('loadedmetadata', () => {
-            video.play();
-            requestAnimationFrame(processFrame);
-          });
-        })
-        .catch(err => {
-          console.error('Error cámara:', err.name, err.message);
-          log.textContent = 'No se pudo acceder a la cámara';
-        });
+      // Solicitar acceso a la cámara
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (err) {
+        console.error('Error al acceder a la cámara:', err);
+        log.textContent = 'No se pudo acceder a la cámara.';
+        return;
+      }
 
-      // 3) Procesar cada frame una vez que el vídeo esté listo
+      video.addEventListener('loadedmetadata', () => {
+        video.play();
+        requestAnimationFrame(processFrame);
+      });
+
       async function processFrame() {
         const results = await gestureRecognizer.recognizeForVideo(video, performance.now());
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (results.handedGestures.length) {
           results.multiHandLandmarks.forEach((landmarks, i) => {
-            window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color:'#00FF00', lineWidth:2 });
-            window.drawLandmarks(ctx, landmarks, { color:'#FF0000', lineWidth:1 });
+            // Dibuja los puntos y conexiones de la mano
+            window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+            window.drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
+
             const best = results.handedGestures[i][0];
-            log.textContent = `Mano ${i+1}: ${best.categoryName} (${(best.score*100).toFixed(1)}%)`;
+            log.textContent = `Mano ${i + 1}: ${best.categoryName} (${(best.score * 100).toFixed(1)}%)`;
           });
         } else {
           log.textContent = 'Sin gesto claro';
