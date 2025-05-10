@@ -1,150 +1,136 @@
-<script>
-const videoElement = document.getElementById('videoElement');
-const canvasElement = document.getElementById('canvasElement');
-const canvasCtx = canvasElement.getContext('2d');
-const outputText = document.getElementById('outputText');
-
-let gestureBuffer = [];
-let lastDetectionTime = 0;
-const gestureCooldown = 1000; // 1 segundo entre detecciones
-
-const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-});
-
-// Configuración mejorada
-hands.setOptions({
-    maxNumHands: 2,
-    modelComplexity: 2, // Modelo más preciso
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.7
-});
-
-hands.onResults(processResults);
-
-const camera = new Camera(videoElement, {
-    onFrame: async () => {
-        await hands.send({image: videoElement});
-    },
-    width: 640,
-    height: 480
-});
-
-camera.start();
-
-function processResults(results) {
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    
-    if (results.multiHandLandmarks) {
-        results.multiHandLandmarks.forEach((landmarks, index) => {
-            drawLandmarks(landmarks);
-            const gesture = detectGesture(landmarks, results.multiHandedness[index]);
-            updateGestureBuffer(gesture);
-        });
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traductor de Lengua de Señas Argentina</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
     }
-    canvasCtx.restore();
-    
-    updateOutputText();
-}
+    #videoContainer {
+      position: relative;
+      width: 640px;
+      height: 480px;
+    }
+    video, canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1);
+    }
+    #outputText {
+      width: 640px;
+      height: 100px;
+      margin: 20px 0;
+      padding: 10px;
+      font-size: 1.2em;
+      border: 2px solid #333;
+      border-radius: 5px;
+      resize: none;
+    }
+    .button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Traductor de Lengua de Señas Argentina</h1>
+  <div id="videoContainer">
+    <video id="videoElement" autoplay muted playsinline></video>
+    <canvas id="canvasElement"></canvas>
+  </div>
+  <textarea id="outputText" placeholder="Texto traducido aparecerá aquí..." readonly></textarea>
+  <button class="button" onclick="clearText()">Limpiar texto</button>
 
-function drawLandmarks(landmarks) {
-    canvasCtx.fillStyle = '#00FF00';
-    landmarks.forEach(landmark => {
-        canvasCtx.beginPath();
-        canvasCtx.arc(landmark.x * canvasElement.width,
-                     landmark.y * canvasElement.height,
-                     5, 0, 2 * Math.PI);
-        canvasCtx.fill();
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
+  <script>
+    const videoElement = document.getElementById('videoElement');
+    const canvasElement = document.getElementById('canvasElement');
+    const canvasCtx = canvasElement.getContext('2d');
+    const outputText = document.getElementById('outputText');
+
+    // Buffer y temporización para confirmación de gesto
+    let gestureBuffer = [];
+    let lastGesture = null;
+    let lastTime = 0;
+    const confirmDelay = 500; // ms
+    const bufferSize = 5;
+    let translatedText = '';
+
+    // Mapeo de letras LSA (simplificado)
+    const lsaMapping = {
+      'A': 'A',
+      'B': 'B',
+      'C': 'C',
+      'D': 'D',
+      // Añade aquí más letras/señas según LSA Argentina
+    };
+
+    // Inicializar MediaPipe Hands
+    const hands = new Hands({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
-}
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+    hands.onResults(onResults);
 
-function detectGesture(landmarks, handedness) {
-    const fingersUp = checkFingersUp(landmarks);
-    const isRightHand = handedness[0].label === 'Right';
-    
-    // Detección mejorada de letras
-    if (isClosedFist(fingersUp)) return 'A';
-    if (isOpenHand(fingersUp)) return 'B';
-    if (isCShape(landmarks)) return 'C';
-    if (isDShape(landmarks, fingersUp)) return 'D';
-    if (isEShape(fingersUp)) return 'E';
-    // Añadir más letras según LSA
-    
-    return '';
-}
+    // Iniciar cámara
+    const camera = new Camera(videoElement, {
+      onFrame: async () => await hands.send({image: videoElement}),
+      width: 640,
+      height: 480
+    });
+    camera.start();
 
-// Funciones de utilidad mejoradas
-function checkFingersUp(landmarks) {
-    const fingerJoints = [3, 6, 10, 14, 18];
-    return fingerJoints.map((joint, index) => 
-        landmarks[joint + 3].y < landmarks[joint].y
-    );
-}
+    // Ajustar tamaño del canvas al cargar la ventana
+    window.onload = () => {
+      canvasElement.width = videoElement.offsetWidth;
+      canvasElement.height = videoElement.offsetHeight;
+    };
 
-function isClosedFist(fingersUp) {
-    return fingersUp.every(finger => !finger);
-}
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      // Dibujar imagen invertida para espejo
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-function isOpenHand(fingersUp) {
-    return fingersUp.slice(1).every(finger => finger);
-}
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        // Dibujar conectores y puntos más pequeños
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+        drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
 
-function isCShape(landmarks) {
-    const thumbTip = landmarks[4];
-    const pinkyTip = landmarks[20];
-    return Math.abs(thumbTip.x - pinkyTip.x) > 0.3;
-}
-
-function isDShape(landmarks, fingersUp) {
-    return fingersUp[1] && !fingersUp.slice(2,4).some(f => f) &&
-           distance(landmarks[8], landmarks[4]) < 0.1;
-}
-
-function distance(p1, p2) {
-    return Math.sqrt(
-        Math.pow(p1.x - p2.x, 2) +
-        Math.pow(p1.y - p2.y, 2)
-    );
-}
-
-function updateGestureBuffer(gesture) {
-    const now = Date.now();
-    if (gesture && now - lastDetectionTime > gestureCooldown) {
-        gestureBuffer.push(gesture);
-        lastDetectionTime = now;
-        
-        if (gestureBuffer.length > 5) {
-            gestureBuffer.shift();
-        }
-    }
-}
-
-function updateOutputText() {
-    const gestureCounts = gestureBuffer.reduce((acc, val) => {
-        acc[val] = (acc[val] || 0) + 1;
-        return acc;
-    }, {});
-
-    const mostFrequent = Object.entries(gestureCounts)
-        .sort((a, b) => b[1] - a[1])[0];
-
-    if (mostFrequent && mostFrequent[1] > 2) {
-        currentText += mostFrequent[0];
-        outputText.value = currentText;
-        gestureBuffer = [];
-    }
-}
-
-function clearText() {
-    currentText = '';
-    outputText.value = '';
-    gestureBuffer = [];
-}
-
-window.onload = () => {
-    canvasElement.width = videoElement.offsetWidth;
-    canvasElement.height = videoElement.offsetHeight;
-};
-</script>
+        const now = performance.now();
+        const gesture = detectGesture(landmarks);
+        if (gesture && gesture === lastGesture && now - lastTime >= confirmDelay) {
+          // Confirmar gesto y añadir al buffer
+          gestureBuffer.push(gesture);
+          if (gestureBuffer.length > bufferSize) gestureBuffer.shift();
+          const confirmed = mode(gestureBuffer);
+          if (confirmed && confirmed !== null) {
+            translatedText += lsaMapping[confirmed] || confirmed;
+            outputText.value = translatedText;
+            gestureBuffer = [];
+          }
+          lastTime = now;
+        } else if (gesture && gesture !== lastGesture) {
+          lastGesture = gesture;
