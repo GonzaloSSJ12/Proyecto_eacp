@@ -1,114 +1,164 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seguimiento de Manos y Gestos LSA</title>
-  <style>
-    body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; margin: 0; padding: 20px; font-family: sans-serif; }
-    #container { position: relative; width: 640px; height: 480px; }
-    video, canvas { position: absolute; top: 0; left: 0; width: 640px; height: 480px; }
-    #message { margin-top: 500px; font-size: 1.2em; color: #333; width: 640px; text-align: left; white-space: pre-wrap; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traductor LSA Argentina</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+        }
+        #videoContainer {
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            position: relative;
+        }
+        #videoElement {
+            width: 100%;
+            height: auto;
+            transform: scaleX(-1);
+            border-radius: 10px;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            font-size: 1.2em;
+            min-height: 60px;
+        }
+    </style>
 </head>
 <body>
-  <h1>Reconocimiento de Gestos LSA</h1>
-  <div id="container">
-    <video id="video" autoplay muted></video>
-    <canvas id="overlay"></canvas>
-  </div>
-  <div id="message"></div>
+    <div id="videoContainer">
+        <video id="videoElement" autoplay playsinline></video>
+    </div>
+    <div id="output"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('overlay');
-    canvas.width = 640; canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-    const messageEl = document.getElementById('message');
+<script type="module">
+import { GestureRecognizer, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.7/vision_bundle.js';
 
-    // Para acumular texto
-    const detected = [];
+class SignLanguageTranslator {
+    constructor() {
+        this.recognizer = null;
+        this.video = document.getElementById('videoElement');
+        this.output = document.getElementById('output');
+        this.lastGestureTime = 0;
+        this.sentence = [];
+        this.init();
+    }
 
-    // Retener último gesto para confirmación
-    let lastGesture = null;
-    let lastTime = 0;
-    const confirmDelay = 500; // ms
+    async init() {
+        await this.setupCamera();
+        await this.loadModel();
+        this.detectGestures();
+    }
 
-    // Configurar MediaPipe Hands
-    const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-    hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
-    hands.onResults(onResults);
-    const camera = new Camera(video, { onFrame: async () => await hands.send({ image: video }), width: 640, height: 480 });
-    camera.start();
-
-    const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
-
-    function onResults(results) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        // Dibujar
-        results.multiHandLandmarks.forEach(l => {
-          drawConnectors(ctx, l, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-          drawLandmarks(ctx, l, { color: '#FF0000', lineWidth: 1, radius: 4 });
-        });
-        // Reconocer gesto en primera mano
-        const g = recognize(results.multiHandLandmarks[0]);
-        const now = performance.now();
-        if (g && g === lastGesture && now - lastTime > confirmDelay) {
-          // confirmar y agregar si no repetido
-          if (detected[detected.length-1] !== g) detected.push(g);
-          updateMessage();
-          lastTime = now;
-        } else if (g && g !== lastGesture) {
-          lastGesture = g;
-          lastTime = now;
+    async setupCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                }
+            });
+            this.video.srcObject = stream;
+            await new Promise(resolve => this.video.onloadedmetadata = resolve);
+        } catch (error) {
+            this.output.textContent = 'Error: Permite acceso a la cámara';
+            console.error('Camera error:', error);
         }
-      }
     }
 
-    function recognize(l) {
-      const f = countFingers(l);
-      // Gestos básicos
-      if (f >= 4) return 'Hola';          // Mano casi abierta
-      if (f <= 0) return 'Puño';         // Mano cerrada totalmente
-      // Pulgar arriba
-      if (isThumbsUp(l)) return 'Pulgar arriba';
-      // Te amo: pulgar, índice y meñique extendidos
-      if (isILoveYou(l)) return 'Te amo';
-      return null;
+    async loadModel() {
+        try {
+            const vision = await FilesetResolver.forVisionTasks(
+                'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.7/wasm'
+            );
+            
+            this.recognizer = await GestureRecognizer.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task',
+                    delegate: 'GPU'
+                },
+                runningMode: 'VIDEO',
+                numHands: 2,
+                minHandDetectionConfidence: 0.8
+            });
+        } catch (error) {
+            this.output.textContent = 'Error cargando el modelo';
+            console.error('Model load error:', error);
+        }
     }
 
-    function countFingers(l) {
-      let c = 0;
-      [8,12,16,20].forEach(i => { if (l[i].y < l[i-2].y) c++; });
-      const right = l[17].x < l[5].x;
-      if (right ? l[4].x < l[3].x : l[4].x > l[3].x) c++;
-      return c;
+    async detectGestures() {
+        if (!this.recognizer) return;
+
+        const processFrame = async () => {
+            try {
+                const results = this.recognizer.recognizeForVideo(this.video, Date.now());
+                this.processResults(results);
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+            requestAnimationFrame(processFrame);
+        };
+        
+        processFrame();
     }
 
-    function isThumbsUp(l) {
-      // pulgar extendido y resto doblados
-      const t = (l[4].x < l[3].x) === (l[17].x < l[5].x);
-      const others = [8,12,16,20].every(i => l[i].y > l[i-2].y);
-      return t && others;
+    processResults(results) {
+        if (!results.gestures || results.gestures.length === 0) return;
+
+        const currentTime = Date.now();
+        if (currentTime - this.lastGestureTime < 1000) return;
+
+        const gestures = results.gestures[0]
+            .filter(g => g.score >= 0.8)
+            .map(g => this.translateGesture(g.categoryName));
+
+        if (gestures.length > 0) {
+            this.updateSentence(gestures[0]);
+            this.lastGestureTime = currentTime;
+        }
     }
 
-    function isILoveYou(l) {
-      // pulgar, indice, meñique extendidos; medio y anular doblados
-      const thumb = (l[4].x < l[3].x) === (l[17].x < l[5].x);
-      const index = l[8].y < l[6].y;
-      const middle = l[12].y > l[10].y;
-      const ring = l[16].y > l[14].y;
-      const pinky = l[20].y < l[18].y;
-      return thumb && index && pinky && middle && ring;
+    translateGesture(gesture) {
+        const gesturesMap = {
+            'Thumb_Up': 'Hola',
+            'Open_Palm': ' ',
+            'Closed_Fist': 'A',
+            'Victory': 'B',
+            'Pointing_Up': 'C',
+            'ILoveYou': 'D',
+            'Thumb_Down': 'E',
+            'Raised_Hand': 'F',
+            'Finger_Heart': 'Gracias',
+            'Hand_Wave': 'Adiós'
+        };
+        return gesturesMap[gesture] || '';
     }
 
-    function updateMessage() {
-      messageEl.textContent = detected.join(' · ');
+    updateSentence(text) {
+        this.sentence.push(text);
+        
+        if (this.sentence.length > 15) {
+            this.sentence = this.sentence.slice(-10);
+        }
+        
+        this.output.textContent = this.sentence.join('')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
-  </script>
+}
+
+// Iniciar aplicación
+new SignLanguageTranslator();
+</script>
 </body>
 </html>
