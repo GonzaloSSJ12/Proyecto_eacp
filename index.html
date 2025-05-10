@@ -14,16 +14,16 @@
       background: #f0f0f0;
       font-family: sans-serif;
     }
-    video, canvas {
+    #video, #overlay {
       position: absolute;
       top: 20px;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translateX(-50%) scaleX(-1); /* espejo */
       width: 640px;
       height: 480px;
     }
-    video { z-index: 1; }
-    canvas { 
+    #video { z-index: 1; }
+    #overlay { 
       z-index: 2;
       pointer-events: none;
     }
@@ -88,10 +88,22 @@
       ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        // Dibujar cada mano
+        // Dibujo espejo en canvas
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.translate(-canvasElement.width, 0);
+        // dibujar vídeo invertido (no es estrictamente necesario si video está con CSS)
+        ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+        ctx.restore();
+
+        // Dibujar landmarks también en espejo
         results.multiHandLandmarks.forEach(landmarks => {
+          ctx.save();
+          ctx.scale(-1, 1);
+          ctx.translate(-canvasElement.width, 0);
           drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
           drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1, radius: 4 });
+          ctx.restore();
         });
 
         // Reconocer gesto en la primera mano
@@ -99,7 +111,6 @@
         const now = performance.now();
 
         if (g && g === lastGesture && now - lastTime > confirmDelay) {
-          // Confirmado: acumular sin duplicar consecutivos
           if (detected[detected.length - 1] !== g) detected.push(g);
           updateMessage();
           lastTime = now;
