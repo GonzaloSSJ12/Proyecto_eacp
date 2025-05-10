@@ -10,6 +10,8 @@
             align-items: center;
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
         }
         
         #videoContainer {
@@ -19,14 +21,7 @@
             margin: 20px;
         }
         
-        #videoElement {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-        }
-        
-        #canvasElement {
+        #videoElement, #canvasElement {
             position: absolute;
             width: 100%;
             height: 100%;
@@ -41,6 +36,7 @@
             font-size: 1.2em;
             border: 2px solid #333;
             border-radius: 5px;
+            resize: none;
         }
         
         .button {
@@ -51,6 +47,11 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .button:hover {
+            background-color: #45a049;
         }
     </style>
 </head>
@@ -65,10 +66,8 @@
     <textarea id="outputText" placeholder="Texto traducido aparecerá aquí..." readonly></textarea>
     <button class="button" onclick="clearText()">Limpiar texto</button>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script>
         const videoElement = document.getElementById('videoElement');
@@ -81,16 +80,14 @@
         let gestureBuffer = [];
 
         const hands = new Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
         });
 
         hands.onResults(processResults);
@@ -106,7 +103,6 @@
         camera.start();
 
         function processResults(results) {
-            canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             
@@ -116,68 +112,29 @@
                     detectGesture(landmarks);
                 });
             }
-            canvasCtx.restore();
         }
 
         function drawLandmarks(landmarks) {
-            canvasCtx.beginPath();
-            for (const landmark of landmarks) {
-                canvasCtx.fillStyle = '#FF0000';
-                canvasCtx.arc(landmark.x * canvasElement.width,
-                             landmark.y * canvasElement.height,
-                             5, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = '#FF0000';
+            landmarks.forEach(landmark => {
+                canvasCtx.beginPath();
+                canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, 5, 0, 2 * Math.PI);
                 canvasCtx.fill();
-            }
+            });
         }
 
         function detectGesture(landmarks) {
-            // Esta es una implementación básica de ejemplo
-            // Deberías implementar la lógica específica para LSA Argentina
-            
             const thumbTip = landmarks[4];
             const indexTip = landmarks[8];
             const middleTip = landmarks[12];
             
-            // Detectar letra "A" (puño cerrado)
             if (thumbTip.y < indexTip.y && thumbTip.y < middleTip.y) {
                 updateText('A');
-            }
-            // Detectar letra "B" (mano abierta)
-            else if (thumbTip.y > indexTip.y && thumbTip.y > middleTip.y) {
+            } else if (thumbTip.y > indexTip.y && thumbTip.y > middleTip.y) {
                 updateText('B');
             }
-            // Añadir más gestos según LSA Argentina...
+            // Agregar más gestos según LSA Argentina...
         }
 
         function updateText(letter) {
             if (letter !== lastGesture) {
-                gestureBuffer.push(letter);
-                lastGesture = letter;
-                
-                if (gestureBuffer.length > 5) { // Esperar varios frames para confirmar
-                    currentText += gestureBuffer[2]; // Tomar el gesto más frecuente
-                    outputText.value = currentText;
-                    gestureBuffer = [];
-                }
-            }
-        }
-
-        function clearText() {
-            currentText = '';
-            outputText.value = '';
-        }
-
-        // Mapeo de gestos a letras (ejemplo simplificado)
-        const lsaMapping = {
-            'A': 'A',
-            'B': 'B',
-            // Agregar más mapeos según LSA Argentina
-        };
-
-        window.onload = () => {
-            canvasElement.width = videoElement.offsetWidth;
-            canvasElement.height = videoElement.offsetHeight;
-        };
-    </script>
-</body>
-</html>
