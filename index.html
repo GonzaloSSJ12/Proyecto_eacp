@@ -18,7 +18,7 @@
       position: absolute;
       top: 20px;
       left: 50%;
-      transform: translateX(-50%) scaleX(-1); /* espejo */
+      transform: translateX(-50%) scaleX(-1); /* espejo fijo */
       width: 640px;
       height: 480px;
     }
@@ -86,24 +86,14 @@
 
     function onResults(results) {
       ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      // Dibujar video directamente, CSS ya invierte imagen
+      ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        // Dibujo espejo en canvas
-        ctx.save();
-        ctx.scale(-1, 1);
-        ctx.translate(-canvasElement.width, 0);
-        // dibujar vídeo invertido (no es estrictamente necesario si video está con CSS)
-        ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-        ctx.restore();
-
-        // Dibujar landmarks también en espejo
+        // Dibujar landmarks y conexiones (canvas invertido por CSS)
         results.multiHandLandmarks.forEach(landmarks => {
-          ctx.save();
-          ctx.scale(-1, 1);
-          ctx.translate(-canvasElement.width, 0);
           drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
           drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1, radius: 4 });
-          ctx.restore();
         });
 
         // Reconocer gesto en la primera mano
@@ -145,12 +135,13 @@
     }
 
     function isILoveYou(l) {
-      const thumb = l[4].y < l[3].y;
-      const index = l[8].y < l[6].y;
-      const middle = l[12].y > l[10].y;
-      const ring = l[16].y > l[14].y;
-      const pinky = l[20].y < l[18].y;
-      return thumb && index && pinky && middle && ring;
+      return (
+        l[4].y < l[3].y &&
+        l[8].y < l[6].y &&
+        l[20].y < l[18].y &&
+        l[12].y > l[10].y &&
+        l[16].y > l[14].y
+      );
     }
 
     function updateMessage() {
