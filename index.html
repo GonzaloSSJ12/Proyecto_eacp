@@ -1,140 +1,150 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Traductor de LSA Argentina</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        
-        #videoContainer {
-            position: relative;
-            width: 640px;
-            height: 480px;
-            margin: 20px;
-        }
-        
-        #videoElement, #canvasElement {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-        }
-        
-        #outputText {
-            width: 640px;
-            height: 100px;
-            margin: 20px;
-            padding: 10px;
-            font-size: 1.2em;
-            border: 2px solid #333;
-            border-radius: 5px;
-            resize: none;
-        }
-        
-        .button {
-            padding: 10px 20px;
-            margin: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
+<script>
+const videoElement = document.getElementById('videoElement');
+const canvasElement = document.getElementById('canvasElement');
+const canvasCtx = canvasElement.getContext('2d');
+const outputText = document.getElementById('outputText');
 
-        .button:hover {
-            background-color: #45a049;
-        }
-    </style>
-</head>
-<body>
-    <h1>Traductor de Lengua de Señas Argentina</h1>
+let gestureBuffer = [];
+let lastDetectionTime = 0;
+const gestureCooldown = 1000; // 1 segundo entre detecciones
+
+const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+// Configuración mejorada
+hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 2, // Modelo más preciso
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
+});
+
+hands.onResults(processResults);
+
+const camera = new Camera(videoElement, {
+    onFrame: async () => {
+        await hands.send({image: videoElement});
+    },
+    width: 640,
+    height: 480
+});
+
+camera.start();
+
+function processResults(results) {
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
-    <div id="videoContainer">
-        <video id="videoElement" autoplay playsinline></video>
-        <canvas id="canvasElement"></canvas>
-    </div>
+    if (results.multiHandLandmarks) {
+        results.multiHandLandmarks.forEach((landmarks, index) => {
+            drawLandmarks(landmarks);
+            const gesture = detectGesture(landmarks, results.multiHandedness[index]);
+            updateGestureBuffer(gesture);
+        });
+    }
+    canvasCtx.restore();
     
-    <textarea id="outputText" placeholder="Texto traducido aparecerá aquí..." readonly></textarea>
-    <button class="button" onclick="clearText()">Limpiar texto</button>
+    updateOutputText();
+}
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+function drawLandmarks(landmarks) {
+    canvasCtx.fillStyle = '#00FF00';
+    landmarks.forEach(landmark => {
+        canvasCtx.beginPath();
+        canvasCtx.arc(landmark.x * canvasElement.width,
+                     landmark.y * canvasElement.height,
+                     5, 0, 2 * Math.PI);
+        canvasCtx.fill();
+    });
+}
 
-    <script>
-        const videoElement = document.getElementById('videoElement');
-        const canvasElement = document.getElementById('canvasElement');
-        const canvasCtx = canvasElement.getContext('2d');
-        const outputText = document.getElementById('outputText');
+function detectGesture(landmarks, handedness) {
+    const fingersUp = checkFingersUp(landmarks);
+    const isRightHand = handedness[0].label === 'Right';
+    
+    // Detección mejorada de letras
+    if (isClosedFist(fingersUp)) return 'A';
+    if (isOpenHand(fingersUp)) return 'B';
+    if (isCShape(landmarks)) return 'C';
+    if (isDShape(landmarks, fingersUp)) return 'D';
+    if (isEShape(fingersUp)) return 'E';
+    // Añadir más letras según LSA
+    
+    return '';
+}
+
+// Funciones de utilidad mejoradas
+function checkFingersUp(landmarks) {
+    const fingerJoints = [3, 6, 10, 14, 18];
+    return fingerJoints.map((joint, index) => 
+        landmarks[joint + 3].y < landmarks[joint].y
+    );
+}
+
+function isClosedFist(fingersUp) {
+    return fingersUp.every(finger => !finger);
+}
+
+function isOpenHand(fingersUp) {
+    return fingersUp.slice(1).every(finger => finger);
+}
+
+function isCShape(landmarks) {
+    const thumbTip = landmarks[4];
+    const pinkyTip = landmarks[20];
+    return Math.abs(thumbTip.x - pinkyTip.x) > 0.3;
+}
+
+function isDShape(landmarks, fingersUp) {
+    return fingersUp[1] && !fingersUp.slice(2,4).some(f => f) &&
+           distance(landmarks[8], landmarks[4]) < 0.1;
+}
+
+function distance(p1, p2) {
+    return Math.sqrt(
+        Math.pow(p1.x - p2.x, 2) +
+        Math.pow(p1.y - p2.y, 2)
+    );
+}
+
+function updateGestureBuffer(gesture) {
+    const now = Date.now();
+    if (gesture && now - lastDetectionTime > gestureCooldown) {
+        gestureBuffer.push(gesture);
+        lastDetectionTime = now;
         
-        let lastGesture = '';
-        let currentText = '';
-        let gestureBuffer = [];
-
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
-        });
-
-        hands.onResults(processResults);
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
-        });
-
-        camera.start();
-
-        function processResults(results) {
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            
-            if (results.multiHandLandmarks) {
-                results.multiHandLandmarks.forEach(landmarks => {
-                    drawLandmarks(landmarks);
-                    detectGesture(landmarks);
-                });
-            }
+        if (gestureBuffer.length > 5) {
+            gestureBuffer.shift();
         }
+    }
+}
 
-        function drawLandmarks(landmarks) {
-            canvasCtx.fillStyle = '#FF0000';
-            landmarks.forEach(landmark => {
-                canvasCtx.beginPath();
-                canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, 5, 0, 2 * Math.PI);
-                canvasCtx.fill();
-            });
-        }
+function updateOutputText() {
+    const gestureCounts = gestureBuffer.reduce((acc, val) => {
+        acc[val] = (acc[val] || 0) + 1;
+        return acc;
+    }, {});
 
-        function detectGesture(landmarks) {
-            const thumbTip = landmarks[4];
-            const indexTip = landmarks[8];
-            const middleTip = landmarks[12];
-            
-            if (thumbTip.y < indexTip.y && thumbTip.y < middleTip.y) {
-                updateText('A');
-            } else if (thumbTip.y > indexTip.y && thumbTip.y > middleTip.y) {
-                updateText('B');
-            }
-            // Agregar más gestos según LSA Argentina...
-        }
+    const mostFrequent = Object.entries(gestureCounts)
+        .sort((a, b) => b[1] - a[1])[0];
 
-        function updateText(letter) {
-            if
+    if (mostFrequent && mostFrequent[1] > 2) {
+        currentText += mostFrequent[0];
+        outputText.value = currentText;
+        gestureBuffer = [];
+    }
+}
+
+function clearText() {
+    currentText = '';
+    outputText.value = '';
+    gestureBuffer = [];
+}
+
+window.onload = () => {
+    canvasElement.width = videoElement.offsetWidth;
+    canvasElement.height = videoElement.offsetHeight;
+};
+</script>
