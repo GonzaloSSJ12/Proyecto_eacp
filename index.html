@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Traductor de Lengua de Señas Argentina</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       display: flex;
@@ -19,10 +19,10 @@
       width: 640px;
       height: 480px;
     }
-    video, canvas {
+    #videoElement, #canvasElement {
       position: absolute;
-      width: 100%;
-      height: 100%;
+      width: 640px;
+      height: 480px;
       transform: scaleX(-1);
     }
     #outputText {
@@ -48,8 +48,8 @@
 <body>
   <h1>Traductor de Lengua de Señas Argentina</h1>
   <div id="videoContainer">
-    <video id="videoElement" autoplay muted playsinline></video>
-    <canvas id="canvasElement"></canvas>
+    <video id="videoElement" autoplay muted playsinline width="640" height="480"></video>
+    <canvas id="canvasElement" width="640" height="480"></canvas>
   </div>
   <textarea id="outputText" placeholder="Texto traducido aparecerá aquí..." readonly></textarea>
   <button class="button" onclick="clearText()">Limpiar texto</button>
@@ -63,6 +63,9 @@
     const canvasElement = document.getElementById('canvasElement');
     const canvasCtx = canvasElement.getContext('2d');
     const outputText = document.getElementById('outputText');
+
+    // Importar funciones de dibujo
+    const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = window;
 
     // Buffer y temporización para confirmación de gesto
     let gestureBuffer = [];
@@ -95,34 +98,27 @@
 
     // Iniciar cámara
     const camera = new Camera(videoElement, {
-      onFrame: async () => await hands.send({image: videoElement}),
+      onFrame: async () => await hands.send({ image: videoElement }),
       width: 640,
       height: 480
     });
     camera.start();
 
-    // Ajustar tamaño del canvas al cargar la ventana
-    window.onload = () => {
-      canvasElement.width = videoElement.offsetWidth;
-      canvasElement.height = videoElement.offsetHeight;
-    };
-
     function onResults(results) {
-      canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      // Dibujar imagen invertida para espejo
+      // Dibujar frame de video invertido
       canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
-        // Dibujar conectores y puntos más pequeños
-        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-        drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
+        // Dibujar conectores y puntos
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+        drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
 
-        const now = performance.now();
+        // Detección de gesto con confirmación\ n        const now = performance.now();
         const gesture = detectGesture(landmarks);
         if (gesture && gesture === lastGesture && now - lastTime >= confirmDelay) {
-          // Confirmar gesto y añadir al buffer
+          // Añadir al buffer
           gestureBuffer.push(gesture);
           if (gestureBuffer.length > bufferSize) gestureBuffer.shift();
           const confirmed = mode(gestureBuffer);
@@ -134,3 +130,52 @@
           lastTime = now;
         } else if (gesture && gesture !== lastGesture) {
           lastGesture = gesture;
+          lastTime = now;
+        }
+      }
+    }
+
+    // Función para detectar gesto básico basado en conteo de dedos
+    function detectGesture(l) {
+      let count = 0;
+      [8,12,16,20].forEach(i => { if (l[i].y < l[i-2].y) count++; });
+      const isRight = l[17].x < l[5].x;
+      if (isRight ? l[4].x < l[3].x : l[4].x > l[3].x) count++;
+
+      if (count === 0) return 'A';      // Puño cerrado -> A
+      if (count === 5) return 'B';      // Mano abierta -> B
+      if (count === 1 && isThumbsUp(l)) return 'C'; // Pulgar arriba -> C
+      if (count === 3 && isILoveYou(l)) return 'D'; // Te amo -> D
+      return null;
+    }
+
+    function isThumbsUp(l) {
+      const thumbUp = (l[4].y < l[3].y);
+      const othersDown = [8,12,16,20].every(i => l[i].y > l[i-2].y);
+      return thumbUp && othersDown;
+    }
+
+    function isILoveYou(l) {
+      return l[4].y < l[3].y && l[8].y < l[6].y && l[20].y < l[18].y && l[12].y > l[10].y && l[16].y > l[14].y;
+    }
+
+    // Obtener valor más frecuente
+    function mode(arr) {
+      const freq = {};
+      let max = 0, result = null;
+      arr.forEach(v => {
+        freq[v] = (freq[v] || 0) + 1;
+        if (freq[v] > max) { max = freq[v]; result = v; }
+      });
+      return result;
+    }
+
+    function clearText() {
+      translatedText = '';
+      outputText.value = '';
+      gestureBuffer = [];
+      lastGesture = null;
+    }
+  </script>
+</body>
+</html>
