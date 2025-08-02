@@ -3,11 +3,6 @@ const videoElem = document.getElementById('video');
 const canvasElem = document.getElementById('canvas');
 const logElem = document.getElementById('log');
 const ctx = canvasElem.getContext('2d');
-ctx.save();
-ctx.translate(canvas.width, 0);
-ctx.scale(-1, 1);
-ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-ctx.restore();
 
 
 // Ajustamos canvas al tamaño del vídeo
