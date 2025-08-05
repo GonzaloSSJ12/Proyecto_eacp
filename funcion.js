@@ -1,6 +1,5 @@
 const classifier = knnClassifier.create();
 let isTraining = false;
-let isDetecting = false;
 let currentGesture = null;
 let trainingStartTime = 0;
 let lastDetection = '';
@@ -8,13 +7,15 @@ let lastDetection = '';
 const videoElement = document.getElementById('video');
 const canvasElement = document.getElementById('overlay');
 const ctx = canvasElement.getContext('2d');
+const progressBar = document.getElementById('progress-bar');
+const progressContainer = document.getElementById('progress');
+const translationsEl = document.getElementById('translations');
 
 let camera = null;
-let facingMode = 'user';
+let facingMode = 'user'; // 'user' (frontal) o 'environment' (trasera)
 let resolution = { width: 640, height: 480 };
 
-// Detectar en qué página estamos para ajustar comportamiento
-const isConfigPage = window.location.pathname.includes('configuracion.html');
+const isDetecting = true; // Detección automática siempre
 
 function resizeCanvas() {
   canvasElement.width = videoElement.videoWidth;
@@ -35,9 +36,7 @@ hands.setOptions({
   minTrackingConfidence: 0.7,
 });
 
-hands.onResults(onResults);
-
-function onResults(results) {
+hands.onResults((results) => {
   resizeCanvas();
   ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
@@ -46,32 +45,30 @@ function onResults(results) {
     results.multiHandLandmarks.forEach((landmarks, i) => {
       const handLabel = results.multiHandedness[i].label.toLowerCase();
 
+      // Dibuja conexiones y puntos de la mano
       window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, {
         color: handLabel === 'left' ? '#00AAFF' : '#00FF00',
         lineWidth: 2,
       });
       window.drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
 
+      // Dibuja letra "L" o "R" en la muñeca
       const wrist = landmarks[0];
       const label = handLabel === 'left' ? 'L' : 'R';
       const x = wrist.x * canvasElement.width + 10;
       const y = wrist.y * canvasElement.height + 5;
-
       ctx.fillStyle = 'black';
       ctx.font = '20px Arial';
       ctx.fillText(label, x, y);
 
-      if (isTraining || isDetecting) {
-        processGesture(landmarks, handLabel);
-      }
+      // Procesar gesto (entrenar o detectar)
+      processGesture(landmarks, handLabel);
     });
   }
-}
+});
 
 function startCamera() {
-  if (camera) {
-    camera.stop();
-  }
+  if (camera) camera.stop();
 
   camera = new Camera(videoElement, {
     onFrame: async () => {
@@ -81,13 +78,11 @@ function startCamera() {
     width: resolution.width,
     height: resolution.height,
   });
+
   camera.start();
 }
 
-function toggleCamera() {
-  facingMode = facingMode === 'user' ? 'environment' : 'user';
-  startCamera();
-}
+startCamera();
 
 async function processGesture(landmarks, handLabel) {
   const features = getNormalizedFeatures(landmarks);
@@ -96,18 +91,28 @@ async function processGesture(landmarks, handLabel) {
   if (isTraining) {
     const elapsed = Date.now() - trainingStartTime;
     const progress = Math.min((elapsed / 3000) * 100, 100);
-    const progressBar = document.getElementById('progress-bar');
     if (progressBar) progressBar.style.width = `${progress}%`;
 
     if (elapsed <= 3000) {
       classifier.addExample(tf.tensor2d(features, [1, 63]), labelWithHand);
+    } else {
+      isTraining = false;
+      if (progressContainer) progressContainer.style.display = 'none';
+      const btn = document.getElementById('trainBtn');
+      if (btn) btn.disabled = false;
+      if (translationsEl) translationsEl.innerHTML += `<div>✅ ${currentGesture} entrenado (izq./der.)</div>`;
+      saveModel();
     }
   }
 
   if (isDetecting) {
-    const result = await classifier.predictClass(tf.tensor2d(features, [1, 63]));
-    if (result.confidences[result.label] > 0.9) {
-      handleDetection(result.label);
+    try {
+      const result = await classifier.predictClass(tf.tensor2d(features, [1, 63]));
+      if (result.confidences[result.label] > 0.9) {
+        handleDetection(result.label);
+      }
+    } catch (e) {
+      // Puede lanzar error si no hay ejemplos entrenados, se ignora
     }
   }
 }
@@ -127,61 +132,23 @@ function getNormalizedFeatures(landmarks) {
   return relativeLandmarks.flatMap((l) => [l.x / maxVal, l.y / maxVal, l.z / maxVal]);
 }
 
-// Funciones para configuración y UI solo en config
-if (isConfigPage) {
-  document.getElementById('trainBtn').onclick = startTraining;
-  document.getElementById('detectBtn').onclick = toggleDetection;
-  document.getElementById('clearBtn')?.addEventListener('click', clearTranslations);
-
-  document.getElementById('cameraSelect').addEventListener('change', (e) => {
-    facingMode = e.target.value;
-    startCamera();
-  });
-
-  document.getElementById('resolutionSelect').addEventListener('change', (e) => {
-    const [w, h] = e.target.value.split('x').map(Number);
-    resolution = { width: w, height: h };
-    startCamera();
-  });
-}
-
 function startTraining() {
   currentGesture = document.getElementById('gestureName').value.trim();
   if (!currentGesture) return alert('Ingrese nombre del gesto');
 
   const btn = document.getElementById('trainBtn');
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   document.getElementById('gestureName').value = '';
 
-  const progressContainer = document.getElementById('progress');
-  const progressBar = document.getElementById('progress-bar');
   if (progressContainer) progressContainer.style.display = 'block';
   if (progressBar) progressBar.style.width = '0%';
 
   isTraining = true;
   trainingStartTime = Date.now();
-
-  setTimeout(() => {
-    isTraining = false;
-    if (progressContainer) progressContainer.style.display = 'none';
-    btn.disabled = false;
-    const translationsEl = document.getElementById('translations');
-    if (translationsEl) {
-      translationsEl.innerHTML += `<div>✅ ${currentGesture} entrenado (izq./der.)</div>`;
-    }
-    saveModel();
-  }, 3000);
-}
-
-function toggleDetection() {
-  isDetecting = !isDetecting;
-  const btn = document.getElementById('detectBtn');
-  if (btn) btn.textContent = isDetecting ? 'Detener Detección' : 'Iniciar Detección';
 }
 
 function handleDetection(gesture) {
   if (gesture !== lastDetection) {
-    const translationsEl = document.getElementById('translations');
     if (translationsEl) {
       translationsEl.innerHTML += `<div>${gesture}</div>`;
       translationsEl.scrollTop = translationsEl.scrollHeight;
@@ -191,11 +158,13 @@ function handleDetection(gesture) {
 }
 
 function clearTranslations() {
-  const translationsEl = document.getElementById('translations');
-  if (translationsEl) {
-    translationsEl.innerHTML = '';
-  }
+  if (translationsEl) translationsEl.innerHTML = '';
   lastDetection = '';
+}
+
+function toggleCamera() {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  startCamera();
 }
 
 async function saveModel() {
@@ -219,4 +188,3 @@ async function loadModel() {
 }
 
 loadModel();
-startCamera();
