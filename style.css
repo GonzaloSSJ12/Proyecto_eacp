@@ -4,118 +4,61 @@ body {
   background-color: #111;
   color: white;
   overflow: hidden;
-}
-#info-box {
-  position: absolute;
-  bottom: 5%;        /* un poco arriba del borde inferior */
-  left: 5%;          /* un poco hacia adentro del borde izquierdo */
-  width: 250px;      /* ancho fijo (ajustable) */
-  height: 150px;     /* alto fijo (ajustable) */
-  background-color: rgba(0, 0, 0, 0.5); /* fondo negro semitransparente */
-  border-radius: 15px;
-  padding: 1rem;
-  color: white;
-  font-size: 1rem;
-  z-index: 3;
-  box-shadow: 0 0 10px rgba(0,0,0,0.7);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  pointer-events: none; /* que no interfiera con clicks */
+  height: 100vh;
+  width: 100vw;
 }
 
 .camera-container {
-  position: relative;
+  position: fixed;
+  top: 0; left: 0;
   width: 100vw;
   height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 5vh 10vw;
-  box-sizing: border-box;
+  overflow: hidden;
 }
 
-video, canvas {
+video {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 1rem;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
   z-index: 0;
+  border-radius: 0;
 }
 
-#overlay {
-  z-index: 1;
-}
-
-#translation-text {
-  position: absolute;
-  bottom: 10%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.6);
-  padding: 1rem 2rem;
-  border-radius: 10px;
-  font-size: 1.5rem;
-  z-index: 2;
-  pointer-events: none;
+canvas {
+  display: none; /* ocultamos el canvas para no interferir visualmente */
 }
 
 #config-button {
-  position: absolute;
-  top: 5%;
-  right: 5%;
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
   background-color: rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   padding: 0.5rem;
   font-size: 1.5rem;
   cursor: pointer;
-  z-index: 3;
-}
-
-#config-menu {
-  position: absolute;
-  top: 10%;
-  right: 5%;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 1rem;
-  z-index: 4;
-}
-
-#config-menu.hidden {
-  display: none;
-}
-
-.config-group {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding: 1rem;
-}
-
-.config-group input,
-.config-group button,
-.config-group select {
-  padding: 0.5rem;
-  font-size: 1rem;
-  border-radius: 5px;
+  z-index: 10;
   border: none;
 }
 
-#progress {
-  width: 100%;
-  height: 10px;
-  background-color: #444;
-  border-radius: 5px;
-  overflow: hidden;
+#info-box {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  width: 250px;
+  height: 150px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 15px;
+  padding: 1rem;
+  color: white;
+  font-size: 1rem;
+  z-index: 10;
+  box-shadow: 0 0 10px rgba(0,0,0,0.7);
+  pointer-events: none;
 }
 
-#progress-bar {
-  width: 0%;
-  height: 100%;
-  background-color: lime;
-  transition: width 0.3s;
+#detected-gesture {
+  margin: 0;
 }
-
