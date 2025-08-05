@@ -8,12 +8,13 @@ let lastDetection = '';
 const videoElement = document.getElementById('video');
 const canvasElement = document.getElementById('overlay');
 const ctx = canvasElement.getContext('2d');
-const progressBar = document.getElementById('progress-bar');
-const progressContainer = document.getElementById('progress');
-const translationsEl = document.getElementById('translations');
 
 let camera = null;
-let facingMode = 'user'; // 'user' (frontal) o 'environment' (trasera)
+let facingMode = 'user';
+let resolution = { width: 640, height: 480 };
+
+// Detectar en qué página estamos para ajustar comportamiento
+const isConfigPage = window.location.pathname.includes('configuracion.html');
 
 function resizeCanvas() {
   canvasElement.width = videoElement.videoWidth;
@@ -34,7 +35,9 @@ hands.setOptions({
   minTrackingConfidence: 0.7,
 });
 
-hands.onResults((results) => {
+hands.onResults(onResults);
+
+function onResults(results) {
   resizeCanvas();
   ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
@@ -63,20 +66,21 @@ hands.onResults((results) => {
       }
     });
   }
-});
+}
 
 function startCamera() {
-  if (camera) camera.stop();
+  if (camera) {
+    camera.stop();
+  }
 
   camera = new Camera(videoElement, {
     onFrame: async () => {
       await hands.send({ image: videoElement });
     },
     facingMode: facingMode,
-    width: 640,
-    height: 480,
+    width: resolution.width,
+    height: resolution.height,
   });
-
   camera.start();
 }
 
@@ -85,8 +89,6 @@ function toggleCamera() {
   startCamera();
 }
 
-startCamera();
-
 async function processGesture(landmarks, handLabel) {
   const features = getNormalizedFeatures(landmarks);
   const labelWithHand = `${currentGesture || ''}_${handLabel}`;
@@ -94,7 +96,8 @@ async function processGesture(landmarks, handLabel) {
   if (isTraining) {
     const elapsed = Date.now() - trainingStartTime;
     const progress = Math.min((elapsed / 3000) * 100, 100);
-    progressBar.style.width = `${progress}%`;
+    const progressBar = document.getElementById('progress-bar');
+    if (progressBar) progressBar.style.width = `${progress}%`;
 
     if (elapsed <= 3000) {
       classifier.addExample(tf.tensor2d(features, [1, 63]), labelWithHand);
@@ -124,6 +127,24 @@ function getNormalizedFeatures(landmarks) {
   return relativeLandmarks.flatMap((l) => [l.x / maxVal, l.y / maxVal, l.z / maxVal]);
 }
 
+// Funciones para configuración y UI solo en config
+if (isConfigPage) {
+  document.getElementById('trainBtn').onclick = startTraining;
+  document.getElementById('detectBtn').onclick = toggleDetection;
+  document.getElementById('clearBtn')?.addEventListener('click', clearTranslations);
+
+  document.getElementById('cameraSelect').addEventListener('change', (e) => {
+    facingMode = e.target.value;
+    startCamera();
+  });
+
+  document.getElementById('resolutionSelect').addEventListener('change', (e) => {
+    const [w, h] = e.target.value.split('x').map(Number);
+    resolution = { width: w, height: h };
+    startCamera();
+  });
+}
+
 function startTraining() {
   currentGesture = document.getElementById('gestureName').value.trim();
   if (!currentGesture) return alert('Ingrese nombre del gesto');
@@ -132,35 +153,48 @@ function startTraining() {
   btn.disabled = true;
   document.getElementById('gestureName').value = '';
 
-  progressContainer.style.display = 'block';
-  progressBar.style.width = '0%';
+  const progressContainer = document.getElementById('progress');
+  const progressBar = document.getElementById('progress-bar');
+  if (progressContainer) progressContainer.style.display = 'block';
+  if (progressBar) progressBar.style.width = '0%';
+
   isTraining = true;
   trainingStartTime = Date.now();
 
   setTimeout(() => {
     isTraining = false;
-    progressContainer.style.display = 'none';
+    if (progressContainer) progressContainer.style.display = 'none';
     btn.disabled = false;
-    translationsEl.innerHTML += `<div>✅ ${currentGesture} entrenado (izq./der.)</div>`;
+    const translationsEl = document.getElementById('translations');
+    if (translationsEl) {
+      translationsEl.innerHTML += `<div>✅ ${currentGesture} entrenado (izq./der.)</div>`;
+    }
     saveModel();
   }, 3000);
 }
 
+function toggleDetection() {
+  isDetecting = !isDetecting;
+  const btn = document.getElementById('detectBtn');
+  if (btn) btn.textContent = isDetecting ? 'Detener Detección' : 'Iniciar Detección';
+}
+
 function handleDetection(gesture) {
   if (gesture !== lastDetection) {
-    translationsEl.innerHTML += `<div>${gesture}</div>`;
+    const translationsEl = document.getElementById('translations');
+    if (translationsEl) {
+      translationsEl.innerHTML += `<div>${gesture}</div>`;
+      translationsEl.scrollTop = translationsEl.scrollHeight;
+    }
     lastDetection = gesture;
-    translationsEl.scrollTop = translationsEl.scrollHeight;
   }
 }
 
-function toggleDetection() {
-  isDetecting = !isDetecting;
-  document.getElementById('detectBtn').textContent = isDetecting ? 'Detener Detección' : 'Iniciar Detección';
-}
-
 function clearTranslations() {
-  translationsEl.innerHTML = '';
+  const translationsEl = document.getElementById('translations');
+  if (translationsEl) {
+    translationsEl.innerHTML = '';
+  }
   lastDetection = '';
 }
 
@@ -185,3 +219,4 @@ async function loadModel() {
 }
 
 loadModel();
+startCamera();
