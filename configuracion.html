@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuración - Traductor de Señas</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="camera-container">
+    <h1>Configuración</h1>
+
+    <div class="config-group">
+      <label for="gestureName">Nombre del gesto</label>
+      <input type="text" id="gestureName" placeholder="Ej: Hola" />
+
+      <button id="trainBtn" onclick="startTraining()">Entrenar gesto</button>
+      <button id="detectBtn" onclick="toggleDetection()">Iniciar Detección</button>
+      <button onclick="clearTranslations()">Limpiar traducciones</button>
+
+      <label for="cameraSelect">Cambiar cámara</label>
+      <select id="cameraSelect" onchange="toggleCamera()">
+        <option value="user">Frontal</option>
+        <option value="environment">Trasera</option>
+      </select>
+
+      <label for="resolutionSelect">Resolución</label>
+      <select id="resolutionSelect">
+        <option value="640x480">640x480</option>
+        <option value="1280x720">1280x720</option>
+        <option value="1920x1080">1920x1080</option>
+      </select>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+  <script src="funcion.js"></script>
+</body>
+</html>

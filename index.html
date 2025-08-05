@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traductor de Señas</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.6.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@2.2.2/dist/knn-classifier.min.js"></script>
+</head>
+<body>
+  <div class="camera-container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+
+    <div id="translation-text">Traducción</div>
+    <div id="config-button" onclick="toggleMenu()">⚙</div>
+
+    <div id="config-menu" class="hidden">
+      <div class="config-group">
+        <input type="text" id="gestureName" placeholder="Nombre de la seña">
+        <button id="trainBtn" onclick="startTraining()">Entrenar Gesto</button>
+        <div id="progress"><div id="progress-bar"></div></div>
+      </div>
+
+      <div class="config-group">
+        <button id="detectBtn" onclick="toggleDetection()">Iniciar Detección</button>
+        <button onclick="clearTranslations()">Limpiar Traducción</button>
+        <button onclick="toggleCamera()">Cambiar Cámara</button>
+        <select onchange="setVideoSize(this.value)">
+          <option value="640x480">640x480</option>
+          <option value="1280x720">1280x720</option>
+          <option value="1920x1080">1920x1080</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <script src="funcion.js"></script>
+</body>
+</html>
