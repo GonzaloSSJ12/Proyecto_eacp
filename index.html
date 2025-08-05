@@ -2,29 +2,29 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Traductor de Señas</title>
-  
-  <!-- Carga del CSS -->
   <link rel="stylesheet" href="style.css" />
-  
-  <!-- Librerías externas -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 </head>
 <body>
-  <div class="camera-container">
-    <video id="video" autoplay muted playsinline></video>
-    <canvas id="overlay"></canvas> <!-- Se oculta con CSS -->
-    <button id="config-button" onclick="window.location.href='configuracion.html'">⚙️</button>
-    <div id="info-box">
-      <p id="detected-gesture">—</p>
-    </div>
-  </div>
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="overlay"></canvas>
 
+  <button id="configBtn" title="Configuración">⚙️</button>
+
+  <div id="translations"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
   <script src="funcion.js"></script>
+
+  <script>
+    document.getElementById('configBtn').addEventListener('click', () => {
+      window.location.href = 'configuracion.html';
+    });
+  </script>
 </body>
 </html>
