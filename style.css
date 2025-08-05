@@ -5,6 +5,24 @@ body {
   color: white;
   overflow: hidden;
 }
+#info-box {
+  position: absolute;
+  bottom: 5%;        /* un poco arriba del borde inferior */
+  left: 5%;          /* un poco hacia adentro del borde izquierdo */
+  width: 250px;      /* ancho fijo (ajustable) */
+  height: 150px;     /* alto fijo (ajustable) */
+  background-color: rgba(0, 0, 0, 0.5); /* fondo negro semitransparente */
+  border-radius: 15px;
+  padding: 1rem;
+  color: white;
+  font-size: 1rem;
+  z-index: 3;
+  box-shadow: 0 0 10px rgba(0,0,0,0.7);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  pointer-events: none; /* que no interfiera con clicks */
+}
 
 .camera-container {
   position: relative;
@@ -100,3 +118,4 @@ video, canvas {
   background-color: lime;
   transition: width 0.3s;
 }
+
