@@ -24,6 +24,7 @@ video {
   object-fit: cover;
   z-index: 0;
   border-radius: 0;
+  transform: scaleX(1);
 }
 
 canvas {
@@ -62,3 +63,4 @@ canvas {
 #detected-gesture {
   margin: 0;
 }
+
