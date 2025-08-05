@@ -85,7 +85,9 @@ function toggleCamera() {
   startCamera();
 }
 
-startCamera();
+window.addEventListener('DOMContentLoaded', () => {
+  startCamera();
+});
 
 async function processGesture(landmarks, handLabel) {
   const features = getNormalizedFeatures(landmarks);
