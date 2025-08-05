@@ -1,45 +1,39 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Traductor de Señas</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.6.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@2.2.2/dist/knn-classifier.min.js"></script>
+  
+  <!-- Carga del CSS -->
+  <link rel="stylesheet" href="style.css" />
+  
+  <!-- Librerías externas -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 </head>
-
+<body>
+  <h1>Traductor de Señas</h1>
   <div class="camera-container">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="overlay"></canvas>
-
-    <div id="translation-text">Traducción</div>
-    <div id="config-button" onclick="toggleMenu()">⚙</div>
-
-    <div id="config-menu" class="hidden">
-      <div class="config-group">
-        <input type="text" id="gestureName" placeholder="Nombre de la seña">
-        <button id="trainBtn" onclick="startTraining()">Entrenar Gesto</button>
-        <div id="progress"><div id="progress-bar"></div></div>
-      </div>
-
-      <div class="config-group">
-        <button id="detectBtn" onclick="toggleDetection()">Iniciar Detección</button>
-        <button onclick="clearTranslations()">Limpiar Traducción</button>
-        <button onclick="toggleCamera()">Cambiar Cámara</button>
-        <select onchange="setVideoSize(this.value)">
-          <option value="640x480">640x480</option>
-          <option value="1280x720">1280x720</option>
-          <option value="1920x1080">1920x1080</option>
-        </select>
-      </div>
-    </div>
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
   </div>
 
+  <div class="controls">
+    <input type="text" id="gestureName" placeholder="Nombre del gesto" />
+    <button onclick="startTraining()" id="trainBtn">Entrenar Nueva Seña</button>
+    <button onclick="toggleDetection()" id="detectBtn">Iniciar Detección</button>
+    <button onclick="clearTranslations()" id="clearBtn">Limpiar Traducciones</button>
+    <button onclick="toggleCamera()">Cambiar Cámara</button>
+    <div id="progress"><div id="progress-bar"></div></div>
+  </div>
+
+  <div id="translations"></div>
+
+  <!-- Tu JS separado -->
   <script src="funcion.js"></script>
 </body>
 </html>
-
