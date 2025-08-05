@@ -4,9 +4,7 @@
   padding: 0;
   box-sizing: border-box;
 }
-#index #config-button, #index #info-box {
-  outline: 3px solid red !important;
-}
+
 html, body {
   width: 100%;
   height: 100%;
@@ -169,4 +167,5 @@ body.config button {
 body.config button:hover {
   background-color: #1669c1;
 }
+
 
