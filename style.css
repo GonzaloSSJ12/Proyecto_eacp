@@ -1,67 +1,169 @@
-body {
+/* Reset básico para ambas páginas */
+* {
   margin: 0;
-  font-family: sans-serif;
-  background-color: #111;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: Arial, sans-serif;
+  background: black;
   color: white;
-  overflow: hidden;
-  height: 100vh;
-  width: 100vw;
 }
 
-.camera-container {
+/* =========================== */
+/* Estilos para index.html */
+/* =========================== */
+body.index {
+  overflow: hidden;
+  background: black;
+  color: white;
+}
+
+body.index #video {
   position: fixed;
-  top: 0; left: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-}
-
-video {
-  position: absolute;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100vh;
   object-fit: cover;
+  transform: scaleX(1);
   z-index: 0;
-  border-radius: 0;
-  transform: scaleX(-1);
 }
 
-canvas {
-  display: none; /* ocultamos el canvas para no interferir visualmente */
-}
-
-#config-button {
+body.index #overlay {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
-  background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  padding: 0.5rem;
-  font-size: 1.5rem;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+}
+
+body.index #config-button {
+  position: fixed;
+  top: 15px;
+  right: 15px;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  color: white;
+  font-size: 24px;
+  padding: 8px 12px;
+  border-radius: 6px;
   cursor: pointer;
   z-index: 10;
-  border: none;
+  transition: background 0.3s ease;
 }
 
-#info-box {
+body.index #config-button:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+body.index #info-box {
   position: fixed;
-  bottom: 1rem;
-  left: 1rem;
-  width: 250px;
-  height: 150px;
-  background-color: rgba(0, 0, 0, 0.5);
-  border-radius: 15px;
-  padding: 1rem;
-  color: white;
-  font-size: 1rem;
+  bottom: 15px;
+  left: 15px;
+  max-width: 320px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.4);
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1.3;
   z-index: 10;
+  user-select: text;
+  color: #eee;
   box-shadow: 0 0 10px rgba(0,0,0,0.7);
-  pointer-events: none;
 }
 
-#detected-gesture {
-  margin: 0;
+body.index #info-box::-webkit-scrollbar {
+  width: 6px;
 }
 
+body.index #info-box::-webkit-scrollbar-track {
+  background: transparent;
+}
 
+body.index #info-box::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 3px;
+}
+
+/* =========================== */
+/* Estilos para configuracion.html */
+/* =========================== */
+body.config {
+  background-color: #121212;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+body.config .camera-container {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(30,30,30,0.85);
+  border-radius: 12px;
+  padding: 30px 25px;
+  box-shadow: 0 0 15px rgba(0,0,0,0.8);
+}
+
+body.config h1 {
+  margin-bottom: 25px;
+  font-weight: 700;
+  font-size: 28px;
+  text-align: center;
+}
+
+body.config .config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+body.config label {
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: 16px;
+}
+
+body.config input[type="text"],
+body.config select {
+  padding: 10px 12px;
+  font-size: 16px;
+  border-radius: 6px;
+  border: none;
+  background-color: #222;
+  color: white;
+  outline: none;
+  transition: background-color 0.3s ease;
+}
+
+body.config input[type="text"]:focus,
+body.config select:focus {
+  background-color: #333;
+}
+
+body.config button {
+  padding: 12px 20px;
+  background-color: #1a73e8;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.25s ease;
+}
+
+body.config button:hover {
+  background-color: #1669c1;
+}
