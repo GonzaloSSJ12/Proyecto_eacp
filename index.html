@@ -19,16 +19,11 @@
   <div class="camera-container">
     <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay"></canvas>
-  </div>
+    
+    <div id="translation-text">Esperando detección...</div>
 
-  <div class="controls">
-    <input type="text" id="gestureName" placeholder="Nombre del gesto" />
-    <button onclick="startTraining()" id="trainBtn">Entrenar Nueva Seña</button>
-    <button onclick="toggleDetection()" id="detectBtn">Iniciar Detección</button>
-    <div id="progress"><div id="progress-bar"></div></div>
+    <button id="config-button" onclick="window.location.href='configuracion.html'">⚙️</button>
   </div>
-
-  <div id="translations"></div>
 
   <!-- Tu JS separado -->
   <script src="funcion.js"></script>
