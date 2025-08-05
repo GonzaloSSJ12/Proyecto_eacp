@@ -85,37 +85,7 @@ function toggleCamera() {
   startCamera();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  startCamera();
-});
-
-// Actualiza el texto del gesto detectado dentro del cuadro transparente
-function handleDetection(gesture) {
-  if (gesture !== lastDetection) {
-    translationsEl.innerHTML += `<div>${gesture}</div>`;
-    lastDetection = gesture;
-    translationsEl.scrollTop = translationsEl.scrollHeight;
-  }
-
-  const detectedGestureEl = document.getElementById('detected-gesture');
-  if (detectedGestureEl) {
-    detectedGestureEl.textContent = gesture;
-  }
-}
-
-// Actualiza el estado (texto) dentro del cuadro transparente
-function updateStatus(status) {
-  const infoBox = document.getElementById('info-box');
-  if (!infoBox) return;
-
-  let statusEl = infoBox.querySelector('.status-text');
-  if (!statusEl) {
-    statusEl = document.createElement('p');
-    statusEl.className = 'status-text';
-    infoBox.prepend(statusEl);
-  }
-  statusEl.textContent = status;
-}
+startCamera();
 
 async function processGesture(landmarks, handLabel) {
   const features = getNormalizedFeatures(landmarks);
@@ -167,28 +137,31 @@ function startTraining() {
   isTraining = true;
   trainingStartTime = Date.now();
 
-  updateStatus('Entrenando...');
-
   setTimeout(() => {
     isTraining = false;
     progressContainer.style.display = 'none';
     btn.disabled = false;
     translationsEl.innerHTML += `<div>✅ ${currentGesture} entrenado (izq./der.)</div>`;
-    updateStatus('Esperando detección...');
     saveModel();
   }, 3000);
+}
+
+function handleDetection(gesture) {
+  if (gesture !== lastDetection) {
+    translationsEl.innerHTML += `<div>${gesture}</div>`;
+    lastDetection = gesture;
+    translationsEl.scrollTop = translationsEl.scrollHeight;
+  }
 }
 
 function toggleDetection() {
   isDetecting = !isDetecting;
   document.getElementById('detectBtn').textContent = isDetecting ? 'Detener Detección' : 'Iniciar Detección';
-  updateStatus(isDetecting ? 'Detectando...' : 'Esperando detección...');
 }
 
 function clearTranslations() {
   translationsEl.innerHTML = '';
   lastDetection = '';
-  updateStatus('Esperando detección...');
 }
 
 async function saveModel() {
